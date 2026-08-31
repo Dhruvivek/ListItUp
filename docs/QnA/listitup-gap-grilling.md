@@ -1,5 +1,7 @@
 # Grill Session: ListItUp Gap Review
 
+> **Superseded 2026-08-26**: the small-Workspace-only scope this session assumed (2-8 person Workspaces, no multi-team org) is discarded under a bigger "medium fish" product scope. See [Wayfinder Map: ListItUp v1+ feature roadmap](https://github.com/Dhruvivek/ListItUp/issues/1) and `docs/QnA/listitup-scope-redefinition.md`. Kept here for historical reasoning only — do not treat its settled outcomes as current. (The Attachment-storage ADR this session produced, `docs/ADR/0002-s3-compatible-attachment-storage.md`, is unaffected and still stands.)
+
 ## Context
 
 Second grilling pass to find gaps in the collaborative accountability model before turning it into a PRD.

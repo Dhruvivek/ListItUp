@@ -1,5 +1,7 @@
 # Grill Session: ListItUp Product Model
 
+> **Superseded 2026-08-26**: the small-Workspace-only scope this session settled (no `Project`/`Portfolio`, single `Owner`, 2-8 person Workspaces) is discarded under a bigger "medium fish" product scope. See [Wayfinder Map: ListItUp v1+ feature roadmap](https://github.com/Dhruvivek/ListItUp/issues/1) and `docs/QnA/listitup-scope-redefinition.md`. Kept here for historical reasoning only — do not treat its settled outcomes as current.
+
 ## Context
 
 Clarifying the core product model for ListItUp as it expands from list capture into personal work, collaboration, tasks, reports, and analytics.
