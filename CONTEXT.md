@@ -8,6 +8,14 @@ ListItUp helps people turn scattered intentions into clear, usable lists — and
 A named container for related Items a user wants to remember, organize, compare, or complete. A List may group its Items into Sections and support multiple views over the same Items.
 _Avoid_: Board, project, bucket
 
+**Starred**:
+A per-User boolean flag on a List marking it for quick access, filterable on the List-browsing page.
+_Avoid_: Favorite, pinned, bookmarked List
+
+**List Status**:
+The coarse health of a List as a whole, set by its members: On Track, On Hold, Completed, or Dropped. Distinct from an Item's lifecycle state.
+_Avoid_: Project status, health, phase
+
 **Section**:
 A named grouping of an Item's siblings within a List, used to organize a List's Items (e.g. by stage or theme).
 _Avoid_: Column, stage, bucket
@@ -151,6 +159,10 @@ _Avoid_: Done, closed, resolved
 **Archive** / **Archived**:
 The act (and resulting state) of removing a List or Item from active use while preserving it for later reference.
 _Avoid_: Delete, hide, retire
+
+**Restore**:
+The act of returning an Archived List or Item to active use.
+_Avoid_: Unarchive, recover
 
 **Report**:
 A live summary view of Items across Lists, usually filtered by Assignee, state, date, or Workspace.
