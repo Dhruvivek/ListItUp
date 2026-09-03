@@ -80,6 +80,14 @@ _Avoid_: Urgency, severity, rank
 A freeform, multi-valued, User-defined tag on an Item, used to organize and filter Items across Lists (unlike Section, which groups Items within one List). In a Personal Space, the User creates their own Labels freely. In a shared Workspace, only the Workspace Owner or Admin can create a Label, mirroring List-creation rights; any Member with access to an Item can apply an existing Label to it.
 _Avoid_: Tag (as a verb, to avoid confusion with Mention), category
 
+**Custom Field**:
+A typed field (Text, Number, Dropdown, or Date) defined on a List by its Lead or a Workspace Admin, with a value set per Item by any List Member. Distinct from Label: a Custom Field is structured and scoped to one List; a Label is freeform and spans Lists.
+_Avoid_: Property, attribute, metadata field
+
+**Dependency**:
+A directional link between two Items — one `blocks`, the other `is blocked by` — manageable across Lists. Purely informational: adding a Dependency does not change either Item's lifecycle state.
+_Avoid_: Blocker (the freeform reason an Item is Blocked, a different concept), predecessor/successor, link
+
 **Personal Space**:
 A single-member operating space where a User keeps private Lists, provisioned automatically for the User after verified first sign-in. Always present for a User regardless of which Workspace they currently have open.
 _Avoid_: Personal Workspace, personal workspace, private space
