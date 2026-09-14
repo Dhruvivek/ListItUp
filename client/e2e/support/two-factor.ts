@@ -48,16 +48,32 @@ export async function enrollTwoFactorViaUI(
   await section.getByLabel("I've saved my recovery codes.").check();
   await expect(confirmButton).toBeEnabled();
 
-  await section
-    .getByLabel("Authenticator code")
-    .fill(await currentTotpCode(secret));
-  await confirmButton.click();
+  const codeField = section.getByLabel("Authenticator code");
+  const enabledNotice = section.getByText(
+    "Two-factor authentication is enabled on your account."
+  );
 
-  // Confirmation awaits a security-notice email send before returning, so
-  // give it more room than the default 5s under CI load.
-  await expect(
-    section.getByText("Two-factor authentication is enabled on your account.")
-  ).toBeVisible({ timeout: 15_000 });
+  // A cold Next.js dev-mode compile of this Server Action can take long
+  // enough, under CI load, for a precomputed 30s TOTP code to go stale
+  // before the server verifies it (confirmation also awaits a
+  // security-notice email send before returning). Recompute and retry
+  // rather than race a compile we don't control.
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    await codeField.fill(await currentTotpCode(secret));
+    await confirmButton.click();
 
-  return { secret, backupCodes };
+    const confirmed = await enabledNotice
+      .waitFor({ state: "visible", timeout: 15_000 })
+      .then(() => true)
+      .catch(() => false);
+
+    if (confirmed) {
+      return { secret, backupCodes };
+    }
+  }
+
+  throw new Error(
+    `2FA enrollment confirmation did not succeed after ${MAX_ATTEMPTS} attempts`
+  );
 }
