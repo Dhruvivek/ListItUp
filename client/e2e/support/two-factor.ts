@@ -24,11 +24,18 @@ export async function enrollTwoFactorViaUI(
   await section.getByLabel("Password").fill(password);
   await section.getByRole("button", { name: "Enable 2FA" }).click();
 
+  // innerText reflects rendered layout, including line breaks the
+  // "break-all" class inserts for this long unbroken string — use
+  // textContent (raw DOM text) so a visual wrap can't corrupt the secret.
   const encodedSecret = await section
     .getByTestId("totp-manual-secret")
-    .innerText();
-  const secret = new TextDecoder().decode(base32.decode(encodedSecret));
-  const backupCodes = await section.locator("ul li").allInnerTexts();
+    .textContent();
+  const secret = new TextDecoder().decode(
+    base32.decode((encodedSecret ?? "").trim())
+  );
+  const backupCodes = (
+    await section.locator("ul li").allTextContents()
+  ).map((code) => code.trim());
 
   const confirmButton = section.getByRole("button", {
     name: "Confirm and enable 2FA",
