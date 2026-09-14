@@ -3,7 +3,13 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticatedSession } from "@/lib/session/require-authenticated-session";
 
-import { updateListDescriptionAction } from "./actions";
+import {
+  addListMemberAction,
+  grantGuestAccessAction,
+  removeListMemberAction,
+  revokeGuestAccessAction,
+  updateListDescriptionAction,
+} from "./actions";
 import { loadListPageData, type ListPageData } from "./page-data";
 
 type Props = {
@@ -57,7 +63,17 @@ function tabHref(workspaceId: string, listId: string, tab: TabKey): string {
     : `/workspaces/${workspaceId}/lists/${listId}?tab=${tab}`;
 }
 
-function RolesColumn({ title, entries }: { title: string; entries: { userId: string; name: string }[] }) {
+function RolesColumn({
+  title,
+  entries,
+  removeLabel,
+  bindRemove,
+}: {
+  title: string;
+  entries: { userId: string; name: string }[];
+  removeLabel?: string;
+  bindRemove?: (userId: string) => (formData: FormData) => Promise<void>;
+}) {
   return (
     <div>
       <div className="font-mono text-[11px] uppercase tracking-wider text-neutral-500">{title}</div>
@@ -66,8 +82,15 @@ function RolesColumn({ title, entries }: { title: string; entries: { userId: str
       ) : (
         <ul className="mt-2 flex flex-col gap-1.5">
           {entries.map((entry) => (
-            <li key={entry.userId} className="text-sm text-neutral-300">
-              {entry.name}
+            <li key={entry.userId} className="flex items-center justify-between gap-2 text-sm text-neutral-300">
+              <span className="truncate">{entry.name}</span>
+              {bindRemove && (
+                <form action={bindRemove(entry.userId)}>
+                  <button type="submit" className="text-xs text-neutral-600 hover:text-[#ff8a70]">
+                    {removeLabel ?? "Remove"}
+                  </button>
+                </form>
+              )}
             </li>
           ))}
         </ul>
@@ -79,17 +102,27 @@ function RolesColumn({ title, entries }: { title: string; entries: { userId: str
 function OverviewTab({
   data,
   boundUpdateDescription,
+  boundAddMember,
+  boundRemoveMember,
+  boundGrantGuest,
+  boundRevokeGuest,
 }: {
   data: ListPageData;
   boundUpdateDescription: (formData: FormData) => Promise<void>;
+  boundAddMember: (formData: FormData) => Promise<void>;
+  boundRemoveMember: (userId: string) => (formData: FormData) => Promise<void>;
+  boundGrantGuest: (formData: FormData) => Promise<void>;
+  boundRevokeGuest: (userId: string) => (formData: FormData) => Promise<void>;
 }) {
+  const canManage = data.canEditDescription;
+
   return (
     <div className="mt-6 flex flex-col gap-8">
       <div>
         <div className="font-mono text-[11px] uppercase tracking-wider text-neutral-500">
           Description
         </div>
-        {data.canEditDescription ? (
+        {canManage ? (
           <form action={boundUpdateDescription} className="mt-2 flex flex-col gap-2">
             <textarea
               name="description"
@@ -117,11 +150,70 @@ function OverviewTab({
           Roles
         </div>
         <div className="grid grid-cols-4 gap-6 rounded-lg border border-neutral-800 bg-[#0d0d0d] p-4">
-          <RolesColumn title="Lead" entries={data.roles.leads} />
-          <RolesColumn title="Member" entries={data.roles.members} />
-          <RolesColumn title="Viewer" entries={data.roles.viewers} />
-          <RolesColumn title="Guest" entries={data.roles.guests} />
+          <RolesColumn title="Lead" entries={data.roles.leads} bindRemove={canManage ? boundRemoveMember : undefined} />
+          <RolesColumn title="Member" entries={data.roles.members} bindRemove={canManage ? boundRemoveMember : undefined} />
+          <RolesColumn title="Viewer" entries={data.roles.viewers} bindRemove={canManage ? boundRemoveMember : undefined} />
+          <RolesColumn
+            title="Guest"
+            entries={data.roles.guests}
+            removeLabel="Revoke"
+            bindRemove={canManage ? boundRevokeGuest : undefined}
+          />
         </div>
+
+        {canManage && (
+          <div className="mt-4 flex flex-wrap items-center gap-4">
+            {data.eligibleMembers.length > 0 && (
+              <form action={boundAddMember} className="flex items-center gap-2">
+                <select
+                  name="userId"
+                  required
+                  defaultValue=""
+                  className="rounded-md border border-neutral-700 bg-[#141414] px-3 py-1.5 text-sm text-neutral-200"
+                >
+                  <option value="" disabled>
+                    Add a Workspace Member…
+                  </option>
+                  {data.eligibleMembers.map((member) => (
+                    <option key={member.userId} value={member.userId}>
+                      {member.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  name="role"
+                  defaultValue="MEMBER"
+                  className="rounded-md border border-neutral-700 bg-[#141414] px-3 py-1.5 text-sm text-neutral-200"
+                >
+                  <option value="MEMBER">as Member</option>
+                  <option value="VIEWER">as Viewer</option>
+                </select>
+                <button
+                  type="submit"
+                  className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:border-[#ff6b4a] hover:text-white"
+                >
+                  Add
+                </button>
+              </form>
+            )}
+
+            <form action={boundGrantGuest} className="flex items-center gap-2">
+              <input
+                type="email"
+                name="email"
+                required
+                placeholder="Grant Guest access by email"
+                className="min-w-56 rounded-md border border-neutral-700 bg-[#141414] px-3 py-1.5 text-sm text-neutral-200 placeholder:text-neutral-600 focus:border-[#ff6b4a] focus:outline-none"
+              />
+              <button
+                type="submit"
+                className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:border-[#ff6b4a] hover:text-white"
+              >
+                Grant
+              </button>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -140,6 +232,10 @@ export default async function ListPage({ params, searchParams }: Props) {
 
   const activeTab: TabKey = query.tab && isTabKey(query.tab) ? query.tab : "overview";
   const boundUpdateDescription = updateListDescriptionAction.bind(null, workspaceId, listId);
+  const boundAddMember = addListMemberAction.bind(null, workspaceId, listId);
+  const boundRemoveMember = (userId: string) => removeListMemberAction.bind(null, workspaceId, listId, userId);
+  const boundGrantGuest = grantGuestAccessAction.bind(null, workspaceId, listId);
+  const boundRevokeGuest = (userId: string) => revokeGuestAccessAction.bind(null, workspaceId, listId, userId);
 
   return (
     <main className="min-h-screen bg-[#080808] px-6 py-12 text-neutral-300">
@@ -173,7 +269,14 @@ export default async function ListPage({ params, searchParams }: Props) {
         </nav>
 
         {activeTab === "overview" ? (
-          <OverviewTab data={data} boundUpdateDescription={boundUpdateDescription} />
+          <OverviewTab
+            data={data}
+            boundUpdateDescription={boundUpdateDescription}
+            boundAddMember={boundAddMember}
+            boundRemoveMember={boundRemoveMember}
+            boundGrantGuest={boundGrantGuest}
+            boundRevokeGuest={boundRevokeGuest}
+          />
         ) : (
           <div className="mt-10 rounded-lg border border-dashed border-neutral-800 px-4 py-16 text-center text-sm text-neutral-600">
             {TAB_NOTES[activeTab]}

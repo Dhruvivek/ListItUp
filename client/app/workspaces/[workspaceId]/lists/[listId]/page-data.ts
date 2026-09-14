@@ -6,6 +6,8 @@ import {
   type ListAccessLevel,
 } from "@/lib/permissions/list-access";
 
+export type EligibleWorkspaceMember = { userId: string; name: string };
+
 export type ListPageData = {
   listId: string;
   workspaceId: string;
@@ -14,8 +16,15 @@ export type ListPageData = {
   status: ListStatus;
   archivedAt: Date | null;
   access: ListAccessLevel;
+  // >=LEAD governs both editing Description and managing the Roles panel
+  // (#27, #28) — one flag for both since they share the same threshold.
   canEditDescription: boolean;
   roles: ListRoles;
+  // Workspace Members not yet holding any List-level role — the candidate
+  // pool for the Roles panel's "add Member/Viewer" control (#28). Guest
+  // grants aren't drawn from this list since a Guest need not be a
+  // Workspace Member at all.
+  eligibleMembers: EligibleWorkspaceMember[];
 };
 
 // Kept separate from the page component (same rationale as the
@@ -38,7 +47,21 @@ export async function loadListPageData(
     return null;
   }
 
-  const roles = await getListRoles(database, { listId });
+  const [roles, workspaceMembers] = await Promise.all([
+    getListRoles(database, { listId }),
+    database.workspaceMember.findMany({
+      where: { workspaceId },
+      include: { user: { select: { id: true, name: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
+
+  const existingListRoleUserIds = new Set(
+    [...roles.leads, ...roles.members, ...roles.viewers].map((entry) => entry.userId)
+  );
+  const eligibleMembers = workspaceMembers
+    .filter((member) => !existingListRoleUserIds.has(member.userId))
+    .map((member) => ({ userId: member.userId, name: member.user.name }));
 
   return {
     listId: list.id,
@@ -50,5 +73,6 @@ export async function loadListPageData(
     access,
     canEditDescription: meetsListAccessLevel(access, "LEAD"),
     roles,
+    eligibleMembers,
   };
 }

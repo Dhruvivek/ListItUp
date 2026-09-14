@@ -60,6 +60,30 @@ async function run() {
       assert.equal(data!.access, "LEAD");
       assert.equal(data!.canEditDescription, true);
       assert.deepEqual(data!.roles.leads.map((r) => r.userId), [leadId]);
+      assert.deepEqual(data!.eligibleMembers, [], "the Lead is already a List Member");
+    }
+
+    // eligibleMembers lists Workspace Members who hold no List-level role
+    // yet (the add-Member/Viewer candidate pool for #28), excluding anyone
+    // who already does.
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const leadId = await createUser();
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: leadId, role: "MEMBER" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: leadId, role: "LEAD" },
+      });
+      const candidateId = await createUser();
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: candidateId, role: "MEMBER" },
+      });
+
+      const data = await loadListPageData(prisma, { userId: leadId, workspaceId, listId });
+
+      assert.ok(data);
+      assert.deepEqual(data!.eligibleMembers, [{ userId: candidateId, name: "Test User" }]);
     }
 
     // A List Member has read access but cannot edit Description.
