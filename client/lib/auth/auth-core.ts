@@ -80,10 +80,22 @@ function requestEmail(body: unknown): string | null {
   return typeof email === "string" ? email.trim().toLowerCase() : null;
 }
 
-function requestPath(request: Request | undefined): string | null {
-  return request
-    ? new URL(request.url).pathname.replace("/api/auth", "")
-    : null;
+// Better Auth's dispatcher attaches `path` (the endpoint's own registered
+// route, e.g. "/sign-in/magic-link") to the hook context for every call —
+// both real HTTP requests and direct `auth.api.*` calls — but its public
+// `MiddlewareInputContext` type omits that runtime-only field, hence the
+// narrow assertion. Deriving the path from `context.request.url` instead
+// (as this used to) silently skipped every rate-limit check for all real
+// app traffic: Server Actions call `auth.api.*` with only `{ body, headers
+// }`, never a `request`.
+function hookPath(context: unknown): string | null {
+  if (!context || typeof context !== "object") {
+    return null;
+  }
+
+  const path = (context as { path?: unknown }).path;
+
+  return typeof path === "string" ? path : null;
 }
 
 async function signInIdentity({
@@ -348,7 +360,7 @@ export function createAuth(
     },
     hooks: {
       before: async (context) => {
-        const path = requestPath(context.request);
+        const path = hookPath(context);
 
         if (!path) {
           return;
@@ -401,7 +413,7 @@ export function createAuth(
           return {};
         }
 
-        const path = requestPath(context.request);
+        const path = hookPath(context);
         if (!path) {
           return {};
         }
