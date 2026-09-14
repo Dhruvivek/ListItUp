@@ -10,13 +10,16 @@ import {
   duplicateSectionAction,
   deleteSectionAction,
   grantGuestAccessAction,
+  moveItemToColumnAction,
   moveSectionAction,
   removeListMemberAction,
   renameSectionAction,
   revokeGuestAccessAction,
+  setBoardGroupByAction,
   setListGroupByAction,
   updateListDescriptionAction,
 } from "./actions";
+import { BoardView } from "./BoardView";
 import { loadListPageData, type ListPageData } from "./page-data";
 import { SectionList } from "./SectionList";
 
@@ -52,11 +55,10 @@ function isTabKey(value: string): value is TabKey {
   return TAB_KEYS.includes(value);
 }
 
-// #29, #31, #32, #36, #33 respectively — these views ship in their own
-// tickets. Dashboard and Messages are this spec's deliberately reserved
+// #32, #36, #33 respectively — these views ship in their own tickets.
+// Dashboard and Messages are this spec's deliberately reserved
 // placeholders (Reports & Analytics, and the v2 Chat/VC work).
-const TAB_NOTES: Record<Exclude<TabKey, "overview" | "list">, string> = {
-  board: "Board view ships in its own ticket (#31).",
+const TAB_NOTES: Record<Exclude<TabKey, "overview" | "list" | "board">, string> = {
   calendar: "Calendar view ships in its own ticket (#32).",
   files: "Files view ships in its own ticket (#36).",
   timeline: "Timeline view ships in its own ticket (#33).",
@@ -251,6 +253,8 @@ export default async function ListPage({ params, searchParams }: Props) {
     moveSectionAction.bind(null, workspaceId, listId, sectionId, direction);
   const boundSetGroupBy = setListGroupByAction.bind(null, workspaceId, listId);
   const boundAddItem = (sectionId: string | null) => addItemAction.bind(null, workspaceId, listId, sectionId);
+  const boundSetBoardGroupBy = setBoardGroupByAction.bind(null, workspaceId, listId);
+  const boundMoveItem = moveItemToColumnAction.bind(null, workspaceId, listId, data.boardGroupBy);
 
   return (
     <main className="min-h-screen bg-[#080808] px-6 py-12 text-neutral-300">
@@ -307,6 +311,16 @@ export default async function ListPage({ params, searchParams }: Props) {
             boundMoveSection={boundMoveSection}
             boundSetGroupBy={boundSetGroupBy}
             boundAddItem={boundAddItem}
+          />
+        ) : activeTab === "board" ? (
+          <BoardView
+            columns={data.boardColumns}
+            groupBy={data.boardGroupBy}
+            canManage={data.canManageSections}
+            workspaceId={workspaceId}
+            listId={listId}
+            boundSetGroupBy={boundSetBoardGroupBy}
+            boundMoveItem={boundMoveItem}
           />
         ) : (
           <div className="mt-10 rounded-lg border border-dashed border-neutral-800 px-4 py-16 text-center text-sm text-neutral-600">

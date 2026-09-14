@@ -1,4 +1,5 @@
 import type { ItemPriority, ItemState, ListStatus, PrismaClient } from "@/generated/prisma/client";
+import { groupItemsForBoard, isValidBoardGroupBy, type BoardColumn, type BoardItem } from "@/lib/list/list-board";
 import { getListRoles, type ListRoles } from "@/lib/list/list-roles";
 import {
   meetsListAccessLevel,
@@ -51,6 +52,12 @@ export type ListPageData = {
   // has to show them somewhere.
   unsectionedItems: ItemSummary[];
   groupBy: string;
+  boardGroupBy: string;
+  boardColumns: BoardColumn[];
+  // List Leads/Members — the candidate pool for Board's Assignee grouping
+  // and per-card "move to" affordance, same reasoning as the Item detail
+  // page's assignableMembers (#30).
+  assignableMembers: EligibleWorkspaceMember[];
 };
 
 // Kept separate from the page component (same rationale as the
@@ -122,6 +129,25 @@ export async function loadListPageData(
     itemsBySectionId.set(item.sectionId, bucket);
   }
 
+  const assignableMembers = [...roles.leads, ...roles.members];
+  const boardGroupBy = isValidBoardGroupBy(list.boardGroupBy) ? list.boardGroupBy : "STATE";
+  const boardItems: BoardItem[] = items.map((item) => ({
+    id: item.id,
+    title: item.title,
+    priority: item.priority,
+    dueDate: item.dueDate,
+    hasParent: item.parentId !== null,
+    sectionId: item.sectionId,
+    state: item.state,
+    assignees: item.assignees.map((assignee) => ({ userId: assignee.userId, name: assignee.user.name })),
+  }));
+  const boardColumns = groupItemsForBoard(
+    boardItems,
+    boardGroupBy,
+    sections.map((section) => ({ id: section.id, name: section.name })),
+    assignableMembers
+  );
+
   return {
     listId: list.id,
     workspaceId: list.workspaceId,
@@ -142,5 +168,8 @@ export async function loadListPageData(
     })),
     unsectionedItems,
     groupBy: list.groupBy,
+    boardGroupBy,
+    boardColumns,
+    assignableMembers,
   };
 }

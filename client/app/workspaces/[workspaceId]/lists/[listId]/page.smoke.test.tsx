@@ -222,6 +222,47 @@ async function run() {
       });
       assert.equal(data, null);
     }
+
+    // Board view returns the correct Items grouped by the List's Board
+    // grouping, for a given User's effective access (#31).
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const memberId = await createUser();
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: memberId, role: "MEMBER" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: memberId, role: "MEMBER" },
+      });
+      await prisma.item.create({
+        data: { id: randomUUID(), listId, title: "To Do Item", creatorId: memberId, state: "TO_DO" },
+      });
+      await prisma.item.create({
+        data: {
+          id: randomUUID(),
+          listId,
+          title: "Blocked Item",
+          creatorId: memberId,
+          state: "BLOCKED",
+          blockerReason: "Stuck",
+        },
+      });
+
+      const data = await loadListPageData(prisma, { userId: memberId, workspaceId, listId });
+
+      assert.ok(data);
+      assert.equal(data!.boardGroupBy, "STATE", "STATE is the Board's default grouping");
+      const columnKeys = data!.boardColumns.map((c) => c.key);
+      assert.deepEqual(columnKeys, ["TO_DO", "IN_PROGRESS", "BLOCKED", "COMPLETE"]);
+      assert.deepEqual(
+        data!.boardColumns.find((c) => c.key === "TO_DO")!.items.map((i) => i.title),
+        ["To Do Item"]
+      );
+      assert.deepEqual(
+        data!.boardColumns.find((c) => c.key === "BLOCKED")!.items.map((i) => i.title),
+        ["Blocked Item"]
+      );
+    }
   } finally {
     const listIds = (
       await prisma.list.findMany({ where: { workspaceId: { in: createdWorkspaceIds } } })

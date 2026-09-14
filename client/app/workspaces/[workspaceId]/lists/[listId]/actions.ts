@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import type { ListMemberRole } from "@/generated/prisma/client";
 import { createItem } from "@/lib/item/item-creation";
+import { isValidBoardGroupBy, moveItemToColumn, setBoardGroupBy, type BoardGroupBy } from "@/lib/list/list-board";
 import { grantGuestAccess, revokeGuestAccess } from "@/lib/list/list-guests";
 import { updateListDescription } from "@/lib/list/list-lifecycle";
 import { addListMember, removeListMember } from "@/lib/list/list-membership";
@@ -205,6 +206,42 @@ export async function addItemAction(
     listId,
     title,
     sectionId: sectionId ?? undefined,
+  });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+export async function setBoardGroupByAction(
+  workspaceId: string,
+  listId: string,
+  formData: FormData
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+  const groupBy = String(formData.get("groupBy") ?? "");
+
+  await setBoardGroupBy(prisma, { actorUserId: session.user.id, listId, groupBy });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+export async function moveItemToColumnAction(
+  workspaceId: string,
+  listId: string,
+  groupBy: string,
+  itemId: string,
+  columnKey: string,
+  blockerReason?: string
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+
+  if (!isValidBoardGroupBy(groupBy)) {
+    return;
+  }
+
+  await moveItemToColumn(prisma, {
+    actorUserId: session.user.id,
+    itemId,
+    groupBy: groupBy as BoardGroupBy,
+    columnKey,
+    blockerReason,
   });
   revalidatePath(listPath(workspaceId, listId));
 }
