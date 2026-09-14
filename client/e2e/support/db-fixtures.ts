@@ -5,14 +5,19 @@ import type { InvitableWorkspaceRole } from "@/lib/workspace/workspace-invitatio
 
 const RUNNER_PATH = path.join(__dirname, "db-fixture-runner.ts");
 
-function runFixture<T>(action: string, payload: unknown): T {
+function runFixture<T extends object>(action: string, payload: unknown): T {
   const output = execFileSync(
     "pnpm",
     ["exec", "tsx", RUNNER_PATH, action, JSON.stringify(payload)],
     { encoding: "utf-8", env: process.env }
   );
 
-  return JSON.parse(output) as T;
+  const result: unknown = JSON.parse(output);
+  if (typeof result !== "object" || result === null) {
+    throw new Error(`db-fixtures: "${action}" returned a non-object result: ${output}`);
+  }
+
+  return result as T;
 }
 
 export function seedInvitation(input: {

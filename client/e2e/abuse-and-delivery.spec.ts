@@ -79,6 +79,8 @@ test("a password-reset request truthfully reports failure when SMTP delivery cle
   expect(resetEmails).toHaveLength(0);
 });
 
+const FAILURES_TO_TRIGGER_RESTRICTION = 5;
+
 test("five failed password attempts impose a progressive restriction that blocks even the correct password", async ({
   page,
 }) => {
@@ -105,7 +107,7 @@ test("five failed password attempts impose a progressive restriction that blocks
   try {
     // Five failed attempts impose a 15-minute restriction shared across
     // identity and IP, regardless of which credential is wrong next time.
-    for (let attempt = 0; attempt < 5; attempt += 1) {
+    for (let attempt = 0; attempt < FAILURES_TO_TRIGGER_RESTRICTION; attempt += 1) {
       await attemptSignIn("a-wrong-password");
       await expect(page.getByText("Incorrect email or password.")).toBeVisible();
     }

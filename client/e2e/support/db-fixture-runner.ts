@@ -28,6 +28,52 @@ interface ReadMembershipInput {
   email: string;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function requireString(payload: Record<string, unknown>, key: string): string {
+  const value = payload[key];
+  if (typeof value !== "string") {
+    throw new Error(`db-fixture-runner: expected "${key}" to be a string.`);
+  }
+
+  return value;
+}
+
+function parseSeedInvitationInput(payload: unknown): SeedInvitationInput {
+  if (!isRecord(payload)) throw new Error("db-fixture-runner: expected an object payload.");
+
+  return {
+    invitedEmail: requireString(payload, "invitedEmail"),
+    workspaceName: requireString(payload, "workspaceName"),
+    role: requireString(payload, "role") as InvitableWorkspaceRole,
+  };
+}
+
+function parseReadMembershipInput(payload: unknown): ReadMembershipInput {
+  if (!isRecord(payload)) throw new Error("db-fixture-runner: expected an object payload.");
+
+  return {
+    workspaceId: requireString(payload, "workspaceId"),
+    email: requireString(payload, "email"),
+  };
+}
+
+function parseCleanupInvitationInput(payload: unknown): CleanupInvitationInput {
+  if (!isRecord(payload)) throw new Error("db-fixture-runner: expected an object payload.");
+  const emails = payload.emails;
+  if (!Array.isArray(emails) || !emails.every((email) => typeof email === "string")) {
+    throw new Error('db-fixture-runner: expected "emails" to be a string array.');
+  }
+
+  return {
+    workspaceId: requireString(payload, "workspaceId"),
+    ownerId: requireString(payload, "ownerId"),
+    emails,
+  };
+}
+
 async function seedInvitation(prisma: PrismaClient, input: SeedInvitationInput) {
   const ownerId = randomUUID();
   const workspaceId = randomUUID();
@@ -98,11 +144,11 @@ async function main() {
     const result = await (async () => {
       switch (action) {
         case "seed-invitation":
-          return seedInvitation(prisma, payload as SeedInvitationInput);
+          return seedInvitation(prisma, parseSeedInvitationInput(payload));
         case "read-membership":
-          return readMembershipRole(prisma, payload as ReadMembershipInput);
+          return readMembershipRole(prisma, parseReadMembershipInput(payload));
         case "cleanup-invitation":
-          return cleanupInvitation(prisma, payload as CleanupInvitationInput);
+          return cleanupInvitation(prisma, parseCleanupInvitationInput(payload));
         default:
           throw new Error(`Unknown db-fixture-runner action: ${action}`);
       }
