@@ -66,13 +66,17 @@ async function run() {
   const ownerId = randomUUID();
   const workspaceId = randomUUID();
 
-  async function createInvitation(email: string): Promise<string> {
+  async function createInvitation(
+    email: string,
+    role: "MEMBER" | "VIEWER" = "MEMBER"
+  ): Promise<string> {
     const token = randomUUID();
     await prisma.workspaceInvitation.create({
       data: {
         id: randomUUID(),
         workspaceId,
         email,
+        role,
         token,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
@@ -83,7 +87,7 @@ async function run() {
   async function testNewUserSignsUpWithLockedEmailVerifiesAndAccepts() {
     const invitedEmail = `invitee-${randomUUID()}@example.test`;
     testEmails.push(invitedEmail);
-    const token = await createInvitation(invitedEmail);
+    const token = await createInvitation(invitedEmail, "VIEWER");
     const callbackURL = `/accept-invitation?token=${token}`;
 
     const signUpResponse = await auth.handler(
@@ -144,6 +148,11 @@ async function run() {
       },
     });
     assert.ok(membership);
+    assert.equal(
+      membership?.role,
+      "VIEWER",
+      "the accepted membership's role must match the invited role"
+    );
   }
 
   async function testInvitationCallbackBindsTheInvitedEmail() {
@@ -277,7 +286,10 @@ async function run() {
       },
     });
     await prisma.workspace.create({
-      data: { id: workspaceId, name: "Launch Team", ownerId },
+      data: { id: workspaceId, name: "Launch Team" },
+    });
+    await prisma.workspaceMember.create({
+      data: { id: randomUUID(), workspaceId, userId: ownerId, role: "OWNER" },
     });
 
     await testNewUserSignsUpWithLockedEmailVerifiesAndAccepts();

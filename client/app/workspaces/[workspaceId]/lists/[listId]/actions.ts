@@ -1,0 +1,187 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+
+import type { ListMemberRole } from "@/generated/prisma/client";
+import { grantGuestAccess, revokeGuestAccess } from "@/lib/list/list-guests";
+import { updateListDescription } from "@/lib/list/list-lifecycle";
+import { addListMember, removeListMember } from "@/lib/list/list-membership";
+import {
+  createSection,
+  deleteSection,
+  duplicateSection,
+  renameSection,
+  reorderSections,
+  setListGroupBy,
+} from "@/lib/list/list-sections";
+import { prisma } from "@/lib/prisma";
+import { requireAuthenticatedSession } from "@/lib/session/require-authenticated-session";
+
+function listPath(workspaceId: string, listId: string): string {
+  return `/workspaces/${workspaceId}/lists/${listId}`;
+}
+
+// The Roles panel only ever offers Member/Viewer (#28) — promoting someone
+// to List Lead isn't part of this ticket's scope.
+const ADDABLE_ROLES: readonly ListMemberRole[] = ["MEMBER", "VIEWER"];
+
+export async function updateListDescriptionAction(
+  workspaceId: string,
+  listId: string,
+  formData: FormData
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+  const description = String(formData.get("description") ?? "");
+
+  await updateListDescription(prisma, { userId: session.user.id, listId, description });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+export async function addListMemberAction(
+  workspaceId: string,
+  listId: string,
+  formData: FormData
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+  const targetUserId = String(formData.get("userId") ?? "");
+  const role = String(formData.get("role") ?? "");
+
+  if (!targetUserId || !ADDABLE_ROLES.includes(role as ListMemberRole)) {
+    return;
+  }
+
+  await addListMember(prisma, {
+    actorUserId: session.user.id,
+    listId,
+    userId: targetUserId,
+    role: role as ListMemberRole,
+  });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+export async function removeListMemberAction(
+  workspaceId: string,
+  listId: string,
+  targetUserId: string
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+  await removeListMember(prisma, { actorUserId: session.user.id, listId, userId: targetUserId });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+export async function grantGuestAccessAction(
+  workspaceId: string,
+  listId: string,
+  formData: FormData
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+  const email = String(formData.get("email") ?? "").trim();
+
+  if (!email) {
+    return;
+  }
+
+  await grantGuestAccess(prisma, { actorUserId: session.user.id, listId, email });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+export async function revokeGuestAccessAction(
+  workspaceId: string,
+  listId: string,
+  targetUserId: string
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+  await revokeGuestAccess(prisma, { actorUserId: session.user.id, listId, userId: targetUserId });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+export async function addSectionAction(
+  workspaceId: string,
+  listId: string,
+  formData: FormData
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+  const name = String(formData.get("name") ?? "").trim();
+
+  if (!name) {
+    return;
+  }
+
+  await createSection(prisma, { actorUserId: session.user.id, listId, name });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+export async function renameSectionAction(
+  workspaceId: string,
+  listId: string,
+  sectionId: string,
+  formData: FormData
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+  const name = String(formData.get("name") ?? "").trim();
+
+  if (!name) {
+    return;
+  }
+
+  await renameSection(prisma, { actorUserId: session.user.id, sectionId, name });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+export async function duplicateSectionAction(
+  workspaceId: string,
+  listId: string,
+  sectionId: string
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+  await duplicateSection(prisma, { actorUserId: session.user.id, sectionId });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+export async function deleteSectionAction(
+  workspaceId: string,
+  listId: string,
+  sectionId: string
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+  await deleteSection(prisma, { actorUserId: session.user.id, sectionId });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+export async function moveSectionAction(
+  workspaceId: string,
+  listId: string,
+  sectionId: string,
+  direction: "up" | "down"
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+
+  const sections = await prisma.section.findMany({ where: { listId }, orderBy: { order: "asc" } });
+  const currentIndex = sections.findIndex((section) => section.id === sectionId);
+  const swapWithIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+
+  if (currentIndex === -1 || swapWithIndex < 0 || swapWithIndex >= sections.length) {
+    return;
+  }
+
+  const orderedSectionIds = sections.map((section) => section.id);
+  [orderedSectionIds[currentIndex], orderedSectionIds[swapWithIndex]] = [
+    orderedSectionIds[swapWithIndex],
+    orderedSectionIds[currentIndex],
+  ];
+
+  await reorderSections(prisma, { actorUserId: session.user.id, listId, orderedSectionIds });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+export async function setListGroupByAction(
+  workspaceId: string,
+  listId: string,
+  formData: FormData
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+  const groupBy = String(formData.get("groupBy") ?? "");
+
+  await setListGroupBy(prisma, { actorUserId: session.user.id, listId, groupBy });
+  revalidatePath(listPath(workspaceId, listId));
+}

@@ -1,12 +1,17 @@
 import { randomUUID } from "node:crypto";
 
-import type { PrismaClient } from "@/generated/prisma/client";
+import type { PrismaClient, WorkspaceRole } from "@/generated/prisma/client";
+
+// Invitations may only ever grant these two Workspace-level roles — ADMIN
+// and OWNER are never invite-time grants (see domain model spec).
+export type InvitableWorkspaceRole = Extract<WorkspaceRole, "MEMBER" | "VIEWER">;
 
 export interface InvitationDetails {
   id: string;
   workspaceId: string;
   workspaceName: string;
   email: string;
+  role: InvitableWorkspaceRole;
 }
 
 function isLiveInvitation(invitation: {
@@ -14,6 +19,16 @@ function isLiveInvitation(invitation: {
   expiresAt: Date;
 }): boolean {
   return !invitation.acceptedAt && invitation.expiresAt > new Date();
+}
+
+function requireInvitableRole(role: WorkspaceRole): InvitableWorkspaceRole {
+  if (role !== "MEMBER" && role !== "VIEWER") {
+    throw new Error(
+      `Workspace invitations may only grant MEMBER or VIEWER, found ${role}.`
+    );
+  }
+
+  return role;
 }
 
 export async function resolveInvitation(
@@ -34,6 +49,7 @@ export async function resolveInvitation(
     workspaceId: invitation.workspaceId,
     workspaceName: invitation.workspace.name,
     email: invitation.email,
+    role: requireInvitableRole(invitation.role),
   };
 }
 
@@ -91,7 +107,7 @@ export async function acceptInvitation(
       id: randomUUID(),
       workspaceId: invitation.workspaceId,
       userId,
-      role: "member",
+      role: requireInvitableRole(invitation.role),
     },
     update: {},
   });

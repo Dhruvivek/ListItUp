@@ -119,13 +119,13 @@ async function run() {
       "sign-up must send exactly one verification email"
     );
 
-    const workspace = await prisma.workspace.findUnique({
-      where: { ownerId: user!.id },
+    const workspace = await prisma.workspace.findFirst({
+      where: { kind: "PERSONAL", members: { some: { userId: user!.id } } },
     });
     assert.equal(
       workspace,
       null,
-      "an unverified User must not have a personal Workspace yet"
+      "an unverified User must not have a Personal Space yet"
     );
   }
 
@@ -184,11 +184,11 @@ async function run() {
     assert.equal(sessionUser.email, email);
 
     const userId = sessionUser.id as string;
-    const workspace = await prisma.workspace.findUnique({
-      where: { ownerId: userId },
+    const workspace = await prisma.workspace.findFirst({
+      where: { kind: "PERSONAL", members: { some: { userId } } },
       include: { lists: true },
     });
-    assert.ok(workspace, "verified first sign-in must provision a Workspace");
+    assert.ok(workspace, "verified first sign-in must provision a Personal Space");
     assert.equal(workspace!.lists.length, 1);
     assert.equal(workspace!.lists[0].isInbox, true);
 
@@ -299,7 +299,7 @@ async function run() {
     await testRollingSessionRenewal(userId, cookie);
   } finally {
     await prisma.workspace.deleteMany({
-      where: { owner: { email: { in: testEmails } } },
+      where: { members: { some: { user: { email: { in: testEmails } } } } },
     });
     await prisma.user.deleteMany({ where: { email: { in: testEmails } } });
     await prisma.verificationEmailThrottle.deleteMany({

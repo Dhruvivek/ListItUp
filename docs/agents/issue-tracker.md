@@ -4,7 +4,9 @@ Issues and PRDs for this repo live as GitHub Issues. Use the `gh` CLI for issue 
 
 ## Repository
 
-`codesuke/ListItUp`
+`Dhruvivek/ListItUp`
+
+**History:** this repo used to be `codesuke/ListItUp`. As of 2026-08-26 the agent account (`Dhruvivek`) only has read access there, so issues/PRDs moved to `Dhruvivek/ListItUp` (the agent's own fork, `origin` in this clone). `VirtuNode-dev/ListItUp` (`upstream`) also exists with full admin access if the tracker needs to move again later — check with the user before switching.
 
 ## Conventions
 
@@ -29,3 +31,16 @@ Create a GitHub issue and apply the appropriate triage label from `docs/agents/t
 ## When A Skill Says "Fetch The Relevant Ticket"
 
 Run `gh issue view <number> --comments`.
+
+## Wayfinding Operations
+
+For the `wayfinder` skill's map/ticket model:
+
+- **The map**: a GitHub issue labeled `wayfinder:map`. Its tickets are its **native sub-issues** (GitHub's parent/child issue relation — confirmed available on this repo via `gh api repos/{owner}/{repo}/issues/{number}/sub_issues`).
+- **Ticket type labels**: `wayfinder:research`, `wayfinder:prototype`, `wayfinder:grilling`, `wayfinder:task` — one per ticket, alongside `wayfinder:map`'s child relation.
+- **Claiming**: assign the ticket issue to the driving dev before work starts.
+- **Blocking**: use GitHub's **native issue dependencies** (confirmed available via `gh api repos/{owner}/{repo}/issues/{number}/dependencies/blocked_by`, GET and POST). Add a blocking edge with:
+  `gh api repos/{owner}/{repo}/issues/{blocked_number}/dependencies/blocked_by -X POST -f issue_id=<blocking_issue_node_id_or_id>`
+  (check the exact payload shape against the current GitHub REST docs when wiring — this endpoint was in limited/beta rollout as of 2026-08-26).
+- **The frontier**: open, unassigned child issues of the map with an empty `blocked_by` list. Query children via the sub-issues endpoint, then check each candidate's `dependencies/blocked_by` for open blockers.
+- **Resolution**: post the answer as an issue comment, then `gh issue close <number> --comment "..."`.

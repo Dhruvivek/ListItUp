@@ -1,5 +1,7 @@
 # Grill Session: Personal and Team Workspaces
 
+> **Superseded 2026-08-26**: this session's personal/shared Workspace model may be revisited under a bigger "medium fish" product scope — see [Wayfinder Map: ListItUp v1+ feature roadmap](https://github.com/Dhruvivek/ListItUp/issues/1) (ticket: "Redefine ListItUp's core domain model & entity hierarchy") and `docs/QnA/listitup-scope-redefinition.md`. Kept here for historical reasoning only — treat its settled outcomes as provisional pending that ticket, not current.
+
 ## Context
 
 Clarifying how ListItUp supports both private personal task management and collaborative project work without splitting the product into separate modes.

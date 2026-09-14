@@ -18,9 +18,11 @@ model User {
   updatedAt        DateTime          @updatedAt
   sessions         Session[]
   accounts         Account[]
-  workspaces       Workspace[]
   twoFactor        TwoFactor[]
   workspaceMembers WorkspaceMember[]
+  listMembers      ListMember[]
+  guestAccess      Guest[]
+  starredLists     Starred[]
   platformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentUser")
   grantedPlatformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentGranter")
   revokedPlatformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentRevoker")
@@ -77,29 +79,43 @@ model Verification {
   @@map("verification")
 }
 
+// SHARED is a multi-User Workspace; PERSONAL is a User's single-member
+// Personal Space, provisioned automatically on first verified sign-in.
+// Both share this table so List/Item modeling doesn't fork, but product
+// surfaces must never expose a Personal Space as a Workspace (CONTEXT.md).
+enum WorkspaceKind {
+  SHARED
+  PERSONAL
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
 model Workspace {
   id          String                @id
   name        String
-  ownerId     String
+  kind        WorkspaceKind         @default(SHARED)
   createdAt   DateTime              @default(now())
   updatedAt   DateTime              @updatedAt
-  owner       User                  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   lists       List[]
   members     WorkspaceMember[]
   invitations WorkspaceInvitation[]
 
-  @@unique([ownerId])
   @@map("workspace")
 }
 
 model WorkspaceMember {
-  id          String    @id
+  id          String        @id
   workspaceId String
   userId      String
-  role        String    @default("member")
-  createdAt   DateTime  @default(now())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        WorkspaceRole @default(MEMBER)
+  createdAt   DateTime      @default(now())
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, userId])
   @@index([userId])
@@ -107,30 +123,123 @@ model WorkspaceMember {
 }
 
 model WorkspaceInvitation {
-  id          String    @id
+  id          String        @id
   workspaceId String
   email       String
-  token       String    @unique
+  // Only MEMBER or VIEWER are valid invite-time grants; ADMIN/OWNER are
+  // never assigned via invitation (see docs/Specs-Planned domain model spec).
+  role        WorkspaceRole @default(MEMBER)
+  token       String        @unique
   expiresAt   DateTime
   acceptedAt  DateTime?
-  createdAt   DateTime  @default(now())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([email])
   @@map("workspace_invitation")
 }
 
+// A List's role ladder is independent of WorkspaceRole (ADR 0009): a
+// ListMember row may only reference a User who already holds a
+// Workspace-level membership in that List's Workspace — enforced at the
+// application layer in lib/list/, since Guest (below) is the only path to
+// List access without one.
+enum ListMemberRole {
+  LEAD
+  MEMBER
+  VIEWER
+}
+
+enum ListStatus {
+  ON_TRACK
+  ON_HOLD
+  COMPLETED
+  DROPPED
+}
+
 model List {
-  id          String    @id
+  id          String       @id
   workspaceId String
   name        String
-  isInbox     Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  description String?
+  status      ListStatus   @default(ON_TRACK)
+  isInbox     Boolean      @default(false)
+  // Soft-delete: archiving never removes data, so restore is always safe
+  // (#26). Null means active.
+  archivedAt  DateTime?
+  // The List view's "Add Rule" grouping-config control (#29) — a validated
+  // string (see lib/list/list-sections.ts's isValidGroupBy) rather than a
+  // native enum, since the full set of groupable fields depends on Item's
+  // not-yet-built schema (#30); only "SECTION" is legal today.
+  groupBy     String       @default("SECTION")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members     ListMember[]
+  guests      Guest[]
+  starredBy   Starred[]
+  sections    Section[]
 
   @@index([workspaceId])
   @@map("list")
+}
+
+model ListMember {
+  id        String         @id
+  listId    String
+  userId    String
+  role      ListMemberRole @default(MEMBER)
+  createdAt DateTime       @default(now())
+  list      List           @relation(fields: [listId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, userId])
+  @@index([userId])
+  @@map("list_member")
+}
+
+// Read-only access to exactly the List(s) it names, without requiring any
+// Workspace-level membership row (unlike ListMember above) — see CONTEXT.md
+// Guest and ADR 0009.
+model Guest {
+  id        String   @id
+  listId    String
+  userId    String
+  createdAt DateTime @default(now())
+  list      List     @relation(fields: [listId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, userId])
+  @@index([userId])
+  @@map("guest")
+}
+
+// A per-User-per-List flag (CONTEXT.md Starred), not a boolean column on
+// List, since it varies by the viewing User.
+model Starred {
+  id        String   @id
+  listId    String
+  userId    String
+  createdAt DateTime @default(now())
+  list      List     @relation(fields: [listId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, listId])
+  @@index([listId])
+  @@map("starred")
+}
+
+model Section {
+  id        String   @id
+  listId    String
+  name      String
+  order     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  list      List     @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@index([listId])
+  @@map("section")
 }
 
 // Better Auth's email-verification tokens are stateless signed JWTs and are
