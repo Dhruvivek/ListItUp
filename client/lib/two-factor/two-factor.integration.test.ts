@@ -284,10 +284,9 @@ async function run() {
       (send) => send.to === email && send.type === "password-reset"
     );
     assert.ok(resetSend);
-    const resetToken = new URL(extractUrl(resetSend!.template.text)).pathname
-      .split("/")
-      .filter(Boolean)
-      .at(-1);
+    const resetToken = new URL(
+      extractUrl(resetSend!.template.text)
+    ).searchParams.get("token");
     const newPassword = "a-brand-new-long-password";
 
     const resetResponse = await auth.handler(
