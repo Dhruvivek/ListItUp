@@ -1,0 +1,65 @@
+import type { FilesViewEntry } from "@/lib/list/list-files";
+
+function formatFileSize(sizeBytes: number): string {
+  if (sizeBytes < 1024) {
+    return `${sizeBytes} B`;
+  }
+  if (sizeBytes < 1024 * 1024) {
+    return `${(sizeBytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatDate(date: Date): string {
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+export function FilesView({
+  entries,
+  workspaceId,
+  listId,
+}: {
+  entries: FilesViewEntry[];
+  workspaceId: string;
+  listId: string;
+}) {
+  if (entries.length === 0) {
+    return (
+      <div className="mt-10 rounded-lg border border-dashed border-neutral-800 px-4 py-16 text-center text-sm text-neutral-600">
+        No Attachments yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6 flex flex-col gap-1 rounded-lg border border-neutral-800 bg-[#0d0d0d] p-4">
+      {entries.map((entry) => (
+        <div
+          key={entry.attachmentId}
+          className="flex items-center justify-between gap-3 border-b border-neutral-900 py-2 last:border-0"
+        >
+          <div className="min-w-0">
+            <a
+              href={`/api/workspaces/${workspaceId}/lists/${listId}/items/${entry.itemId}/attachments/${entry.attachmentId}`}
+              className="block truncate text-sm text-neutral-200 hover:text-white hover:underline"
+            >
+              {entry.fileName}
+            </a>
+            <a
+              href={`/workspaces/${workspaceId}/lists/${listId}/items/${entry.itemId}`}
+              className="block truncate text-xs text-neutral-500 hover:text-neutral-300 hover:underline"
+            >
+              {entry.itemTitle}
+            </a>
+          </div>
+          <div className="flex-shrink-0 text-right text-xs text-neutral-600">
+            <div>{formatFileSize(entry.sizeBytes)}</div>
+            <div>
+              {entry.uploaderName} · {formatDate(entry.createdAt)}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
