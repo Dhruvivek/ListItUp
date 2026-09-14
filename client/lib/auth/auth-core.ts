@@ -80,10 +80,17 @@ function requestEmail(body: unknown): string | null {
   return typeof email === "string" ? email.trim().toLowerCase() : null;
 }
 
-function requestPath(request: Request | undefined): string | null {
-  return request
-    ? new URL(request.url).pathname.replace("/api/auth", "")
-    : null;
+// better-call binds the endpoint's own path onto the context regardless of
+// call style; better-auth's hook types don't declare it (they're typed for
+// the narrower "input" context shape), but it's present at runtime for both
+// auth.handler() requests and in-process auth.api.*() calls (Server
+// Actions) — unlike context.request, which is only ever set when an actual
+// Request object was passed in.
+function hookRequestPath(context: {
+  path?: unknown;
+  body?: unknown;
+}): string | null {
+  return typeof context.path === "string" ? context.path : null;
 }
 
 async function signInIdentity({
@@ -348,7 +355,7 @@ export function createAuth(
     },
     hooks: {
       before: async (context) => {
-        const path = requestPath(context.request);
+        const path = hookRequestPath(context);
 
         if (!path) {
           return;
@@ -401,7 +408,7 @@ export function createAuth(
           return {};
         }
 
-        const path = requestPath(context.request);
+        const path = hookRequestPath(context);
         if (!path) {
           return {};
         }

@@ -1,12 +1,18 @@
 import { expect, test } from "@playwright/test";
 
 import { signUpAndVerify, uniqueTestUser } from "./support/auth-flows";
+import { pageAlert } from "./support/locators";
 import { waitForMailpitLink } from "./support/mailpit";
 import { currentTotpCode, enrollTwoFactorViaUI } from "./support/two-factor";
 
 test("a User must acknowledge saved recovery codes before 2FA enrollment confirms", async ({
   page,
 }) => {
+  // This flow makes several full round trips (sign-up, verify, enable,
+  // confirm) — under CI load that's occasionally slower than the default
+  // 30-60s test budget affords.
+  test.setTimeout(90_000);
+
   const user = uniqueTestUser("two-factor-enroll");
   await signUpAndVerify(page, user);
 
@@ -18,7 +24,10 @@ test("a 2FA-enabled User is challenged at sign-in, and password reset still requ
   page,
   context,
 }) => {
-  test.setTimeout(60_000);
+  // This is the heaviest journey in the suite: two full round trips
+  // (enrollment, then a fresh sign-in/reset/challenge cycle), so give it
+  // more room than the default budget under CI load.
+  test.setTimeout(150_000);
 
   const user = uniqueTestUser("two-factor-challenge");
   await signUpAndVerify(page, user);
@@ -40,7 +49,7 @@ test("a 2FA-enabled User is challenged at sign-in, and password reset still requ
 
   await page.getByLabel("Authenticator code").fill("000000");
   await page.getByRole("button", { name: "Verify" }).click();
-  await expect(page.getByRole("alert")).toContainText(
+  await expect(pageAlert(page)).toContainText(
     "That code didn't work. Try again."
   );
 
