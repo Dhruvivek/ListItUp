@@ -144,19 +144,65 @@ async function run() {
       assert.deepEqual(result, { status: "forbidden" });
     }
 
-    // archiveItem/restoreItem round-trip through the ARCHIVED state.
+    // archiveItem/restoreItem round-trip through the ARCHIVED state,
+    // returning the Item to active use exactly as it was before archiving
+    // — state, BlockerReason, Section, and Assignees all unchanged (#38).
     {
       const { listId, userId } = await createWorkspaceWithListAndMember();
+      const sectionId = randomUUID();
+      await prisma.section.create({ data: { id: sectionId, listId, name: "In Progress", order: 0 } });
       const itemId = await createTestItem(listId, userId);
+      await prisma.item.update({ where: { id: itemId }, data: { sectionId } });
+      await prisma.itemAssignee.create({ data: { id: randomUUID(), itemId, userId } });
+      await transitionItemState(prisma, {
+        actorUserId: userId,
+        itemId,
+        state: "BLOCKED",
+        blockerReason: "Waiting on vendor",
+      });
+
+      const before = await prisma.item.findUniqueOrThrow({
+        where: { id: itemId },
+        include: { assignees: true },
+      });
 
       const archived = await archiveItem(prisma, { actorUserId: userId, itemId });
       assert.deepEqual(archived, { status: "transitioned" });
-      let item = await prisma.item.findUniqueOrThrow({ where: { id: itemId } });
-      assert.equal(item.state, "ARCHIVED");
+      const afterArchive = await prisma.item.findUniqueOrThrow({ where: { id: itemId } });
+      assert.equal(afterArchive.state, "ARCHIVED");
+      assert.equal(afterArchive.stateBeforeArchive, "BLOCKED");
 
       const restored = await restoreItem(prisma, { actorUserId: userId, itemId });
       assert.deepEqual(restored, { status: "transitioned" });
-      item = await prisma.item.findUniqueOrThrow({ where: { id: itemId } });
+      const after = await prisma.item.findUniqueOrThrow({
+        where: { id: itemId },
+        include: { assignees: true },
+      });
+
+      assert.equal(after.state, before.state, "restore returns the exact prior state, not TO_DO");
+      assert.equal(after.blockerReason, before.blockerReason);
+      assert.equal(after.sectionId, before.sectionId);
+      assert.deepEqual(
+        after.assignees.map((a) => a.userId),
+        before.assignees.map((a) => a.userId)
+      );
+      assert.equal(after.stateBeforeArchive, null, "the restore marker is cleared once consumed");
+    }
+
+    // Restoring an Item archived without a recorded prior state (e.g. via a
+    // path that predates stateBeforeArchive) falls back to TO_DO instead of
+    // throwing.
+    {
+      const { listId, userId } = await createWorkspaceWithListAndMember();
+      const itemId = await createTestItem(listId, userId);
+      await prisma.item.update({
+        where: { id: itemId },
+        data: { state: "ARCHIVED", stateBeforeArchive: null },
+      });
+
+      const restored = await restoreItem(prisma, { actorUserId: userId, itemId });
+      assert.deepEqual(restored, { status: "transitioned" });
+      const item = await prisma.item.findUniqueOrThrow({ where: { id: itemId } });
       assert.equal(item.state, "TO_DO");
     }
   } finally {

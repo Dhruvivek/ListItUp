@@ -4,12 +4,14 @@ import { useState } from "react";
 
 import type { ItemState } from "@/generated/prisma/client";
 
+// ARCHIVED isn't offered here — archiving is a dedicated Archive/Restore
+// action (below on the Item detail page) that preserves the prior state to
+// return to, rather than a state a User picks from this list (#38).
 const STATES: { value: ItemState; label: string }[] = [
   { value: "TO_DO", label: "To Do" },
   { value: "IN_PROGRESS", label: "In Progress" },
   { value: "BLOCKED", label: "Blocked" },
   { value: "COMPLETE", label: "Complete" },
-  { value: "ARCHIVED", label: "Archived" },
 ];
 
 export function StateControl({

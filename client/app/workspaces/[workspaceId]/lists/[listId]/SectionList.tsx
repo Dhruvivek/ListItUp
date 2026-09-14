@@ -51,6 +51,37 @@ function ItemRow({ item, workspaceId, listId }: { item: ItemSummary; workspaceId
   );
 }
 
+function ArchivedItemRow({
+  item,
+  workspaceId,
+  listId,
+  boundRestore,
+}: {
+  item: ItemSummary;
+  workspaceId: string;
+  listId: string;
+  boundRestore: () => Promise<void>;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-md px-3 py-2 text-sm">
+      <a
+        href={`/workspaces/${workspaceId}/lists/${listId}/items/${item.id}`}
+        className="flex-1 truncate text-neutral-400 hover:text-neutral-200 hover:underline"
+      >
+        {item.title}
+      </a>
+      <form action={boundRestore}>
+        <button
+          type="submit"
+          className="rounded-md border border-neutral-700 px-3 py-1 text-xs text-neutral-300 hover:border-[#ff6b4a] hover:text-white"
+        >
+          Restore
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function AddItemForm({
   boundAddItem,
 }: {
@@ -76,6 +107,7 @@ function AddItemForm({
 export function SectionList({
   sections,
   unsectionedItems,
+  archivedItems,
   canManage,
   groupBy,
   workspaceId,
@@ -87,9 +119,11 @@ export function SectionList({
   boundMoveSection,
   boundSetGroupBy,
   boundAddItem,
+  boundRestoreItem,
 }: {
   sections: SectionWithItems[];
   unsectionedItems: ItemSummary[];
+  archivedItems: ItemSummary[];
   canManage: boolean;
   groupBy: string;
   workspaceId: string;
@@ -101,10 +135,12 @@ export function SectionList({
   boundMoveSection: (sectionId: string, direction: "up" | "down") => () => Promise<void>;
   boundSetGroupBy: (formData: FormData) => Promise<void>;
   boundAddItem: (sectionId: string | null) => (formData: FormData) => Promise<void>;
+  boundRestoreItem: (itemId: string) => () => Promise<void>;
 }) {
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const [hideEmpty, setHideEmpty] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   function toggleCollapsed(sectionId: string) {
     setCollapsedIds((current) => {
@@ -174,9 +210,40 @@ export function SectionList({
         >
           Hide empty Sections
         </button>
+
+        <button
+          type="button"
+          onClick={() => setShowArchived((current) => !current)}
+          className={
+            showArchived
+              ? "rounded-full border border-[#ff6b4a] px-3 py-1 text-xs text-[#ff8a70]"
+              : "rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-400 hover:text-neutral-200"
+          }
+        >
+          Archived ({archivedItems.length})
+        </button>
       </div>
 
-      {visibleSections.length === 0 && !showUnsectioned ? (
+      {showArchived ? (
+        <div className="rounded-lg border border-neutral-800 bg-[#0d0d0d]">
+          <div className="px-4 py-3 text-sm font-semibold text-white">Archived Items</div>
+          <div className="border-t border-neutral-800 px-1 py-1">
+            {archivedItems.length === 0 ? (
+              <div className="px-3 py-4 text-center text-xs text-neutral-600">No archived Items.</div>
+            ) : (
+              archivedItems.map((item) => (
+                <ArchivedItemRow
+                  key={item.id}
+                  item={item}
+                  workspaceId={workspaceId}
+                  listId={listId}
+                  boundRestore={boundRestoreItem(item.id)}
+                />
+              ))
+            )}
+          </div>
+        </div>
+      ) : visibleSections.length === 0 && !showUnsectioned ? (
         <div className="rounded-lg border border-dashed border-neutral-800 px-4 py-16 text-center text-sm text-neutral-600">
           {sections.length === 0
             ? "No Sections yet."

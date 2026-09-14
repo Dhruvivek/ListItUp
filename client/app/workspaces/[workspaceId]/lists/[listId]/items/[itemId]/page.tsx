@@ -9,11 +9,13 @@ import {
   addItemDependencyAction,
   addNoteAction,
   applyExistingLabelAction,
+  archiveItemAction,
   createAndApplyLabelAction,
   defineCustomFieldAction,
   removeItemAssigneeAction,
   removeItemDependencyAction,
   removeItemLabelAction,
+  restoreItemAction,
   setItemCustomFieldValueAction,
   transitionItemStateAction,
   updateItemDetailsAction,
@@ -69,6 +71,8 @@ export default async function ItemDetailPage({ params, searchParams }: Props) {
 
   const boundUpdateDetails = updateItemDetailsAction.bind(null, workspaceId, listId, itemId);
   const boundTransition = transitionItemStateAction.bind(null, workspaceId, listId, itemId);
+  const boundArchive = archiveItemAction.bind(null, workspaceId, listId, itemId);
+  const boundRestore = restoreItemAction.bind(null, workspaceId, listId, itemId);
   const boundAddAssignee = addItemAssigneeAction.bind(null, workspaceId, listId, itemId);
   const boundRemoveAssignee = (userId: string) => removeItemAssigneeAction.bind(null, workspaceId, listId, itemId, userId);
   const boundAddChild = addChildItemAction.bind(null, workspaceId, listId, itemId);
@@ -195,16 +199,40 @@ export default async function ItemDetailPage({ params, searchParams }: Props) {
 
         <div className="mt-8">
           <div className="mb-2 font-mono text-[11px] uppercase tracking-wider text-neutral-500">State</div>
-          {data.canEdit ? (
-            <StateControl
-              currentState={data.state}
-              currentBlockerReason={data.blockerReason}
-              boundTransition={boundTransition}
-            />
+          {data.state === "ARCHIVED" ? (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-neutral-300">Archived</span>
+              {data.canEdit && (
+                <form action={boundRestore}>
+                  <button
+                    type="submit"
+                    className="rounded-md border border-neutral-700 px-3 py-1 text-xs text-neutral-300 hover:border-[#ff6b4a] hover:text-white"
+                  >
+                    Restore
+                  </button>
+                </form>
+              )}
+            </div>
+          ) : data.canEdit ? (
+            <div className="flex flex-wrap items-start gap-3">
+              <StateControl
+                currentState={data.state}
+                currentBlockerReason={data.blockerReason}
+                boundTransition={boundTransition}
+              />
+              <form action={boundArchive}>
+                <button
+                  type="submit"
+                  className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:border-[#ff6b4a] hover:text-white"
+                >
+                  Archive
+                </button>
+              </form>
+            </div>
           ) : (
             <div className="text-sm text-neutral-300">{STATE_LABEL[data.state]}</div>
           )}
-          {!data.canEdit && data.blockerReason && (
+          {data.state !== "ARCHIVED" && !data.canEdit && data.blockerReason && (
             <div className="mt-2 rounded-md border border-amber-900 bg-amber-950/30 px-3 py-2 text-xs text-amber-400">
               {data.blockerReason}
             </div>

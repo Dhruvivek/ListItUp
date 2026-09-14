@@ -108,7 +108,9 @@ async function run() {
     }
 
     // Items render grouped into their Section, and unsectioned Items land
-    // in a separate bucket (#30).
+    // in a separate bucket (#30). Archived Items are excluded from both and
+    // surfaced separately via archivedItems, the List/Board Archived
+    // toggle's data source (#38).
     {
       const { workspaceId, listId } = await createWorkspaceWithList();
       const memberId = await createUser();
@@ -150,6 +152,57 @@ async function run() {
       assert.deepEqual(
         data!.unsectionedItems.map((item) => item.title),
         ["No Section"]
+      );
+      assert.deepEqual(
+        data!.archivedItems.map((item) => item.title),
+        ["Archived"],
+        "the Archived toggle's data source includes Items excluded from Sections/unsectionedItems"
+      );
+    }
+
+    // archivedItems sorts most-recently-updated first, and stays out of
+    // boardColumns too (#38 covers both the List and Board toggle).
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const memberId = await createUser();
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: memberId, role: "MEMBER" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: memberId, role: "MEMBER" },
+      });
+      await prisma.item.create({
+        data: {
+          id: randomUUID(),
+          listId,
+          title: "Archived Earlier",
+          creatorId: memberId,
+          state: "ARCHIVED",
+          updatedAt: new Date("2026-09-01T00:00:00.000Z"),
+        },
+      });
+      await prisma.item.create({
+        data: {
+          id: randomUUID(),
+          listId,
+          title: "Archived Later",
+          creatorId: memberId,
+          state: "ARCHIVED",
+          updatedAt: new Date("2026-09-10T00:00:00.000Z"),
+        },
+      });
+
+      const data = await loadListPageData(prisma, { userId: memberId, workspaceId, listId });
+
+      assert.ok(data);
+      assert.deepEqual(
+        data!.archivedItems.map((item) => item.title),
+        ["Archived Later", "Archived Earlier"]
+      );
+      assert.deepEqual(
+        data!.boardColumns.flatMap((column) => column.items.map((item) => item.title)),
+        [],
+        "archived Items don't appear in any Board column"
       );
     }
 
@@ -350,6 +403,60 @@ async function run() {
       assert.deepEqual(
         data!.timelineItems.map((item) => item.title),
         ["Visible to Viewer"]
+      );
+    }
+
+    // Files view aggregates Attachments across every Item in the List,
+    // newest first, without needing to open each Item (#22).
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const memberId = await createUser();
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: memberId, role: "MEMBER" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: memberId, role: "MEMBER" },
+      });
+      const itemA = await prisma.item.create({
+        data: { id: randomUUID(), listId, title: "Item A", creatorId: memberId },
+      });
+      const itemB = await prisma.item.create({
+        data: { id: randomUUID(), listId, title: "Item B", creatorId: memberId },
+      });
+      await prisma.attachment.create({
+        data: {
+          id: randomUUID(),
+          itemId: itemA.id,
+          uploaderId: memberId,
+          fileName: "older.pdf",
+          contentType: "application/pdf",
+          sizeBytes: 100,
+          storageKey: `items/${itemA.id}/${randomUUID()}-older.pdf`,
+          createdAt: new Date("2026-09-01T00:00:00.000Z"),
+        },
+      });
+      await prisma.attachment.create({
+        data: {
+          id: randomUUID(),
+          itemId: itemB.id,
+          uploaderId: memberId,
+          fileName: "newer.zip",
+          contentType: "application/zip",
+          sizeBytes: 200,
+          storageKey: `items/${itemB.id}/${randomUUID()}-newer.zip`,
+          createdAt: new Date("2026-09-10T00:00:00.000Z"),
+        },
+      });
+
+      const data = await loadListPageData(prisma, { userId: memberId, workspaceId, listId });
+
+      assert.ok(data);
+      assert.deepEqual(
+        data!.filesViewEntries.map((entry) => [entry.fileName, entry.itemTitle]),
+        [
+          ["newer.zip", "Item B"],
+          ["older.pdf", "Item A"],
+        ]
       );
     }
   } finally {

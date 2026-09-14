@@ -1,5 +1,6 @@
 import type { ItemPriority, ItemState, ListStatus, PrismaClient } from "@/generated/prisma/client";
 import { groupItemsForBoard, isValidBoardGroupBy, type BoardColumn, type BoardItem } from "@/lib/list/list-board";
+import { buildFilesViewEntries, type FilesViewEntry } from "@/lib/list/list-files";
 import { getListRoles, type ListRoles } from "@/lib/list/list-roles";
 import { buildTimelineItems, type TimelineItem } from "@/lib/list/list-timeline";
 import {
@@ -52,6 +53,11 @@ export type ListPageData = {
   // Items with no Section, grouped separately since the List view still
   // has to show them somewhere.
   unsectionedItems: ItemSummary[];
+  // Archived Items in this List, most-recently-updated first — the List
+  // and Board views' Archived toggle browses this flat list and Restores
+  // from it (#38). Excluded from sections/unsectionedItems/boardColumns/
+  // timelineItems/filesViewEntries above, same as before.
+  archivedItems: ItemSummary[];
   groupBy: string;
   boardGroupBy: string;
   boardColumns: BoardColumn[];
@@ -62,6 +68,9 @@ export type ListPageData = {
   // Timeline view's date bars (#33) — every non-Archived Item with a due
   // date, sorted earliest-due-first; Dependency arrows are not rendered.
   timelineItems: TimelineItem[];
+  // Files view (#22) — every Attachment across the List's Items, newest
+  // first.
+  filesViewEntries: FilesViewEntry[];
 };
 
 // Kept separate from the page component (same rationale as the
@@ -84,7 +93,7 @@ export async function loadListPageData(
     return null;
   }
 
-  const [roles, workspaceMembers, sections, items] = await Promise.all([
+  const [roles, workspaceMembers, sections, allItems] = await Promise.all([
     getListRoles(database, { listId }),
     database.workspaceMember.findMany({
       where: { workspaceId },
@@ -92,14 +101,23 @@ export async function loadListPageData(
       orderBy: { createdAt: "asc" },
     }),
     database.section.findMany({ where: { listId }, orderBy: { order: "asc" } }),
-    // Archived Items are browsable via their own filter/toggle inside the
-    // List view (#38), not shown here by default.
     database.item.findMany({
-      where: { listId, state: { not: "ARCHIVED" } },
-      include: { assignees: { include: { user: { select: { id: true, name: true } } } } },
+      where: { listId },
+      include: {
+        assignees: { include: { user: { select: { id: true, name: true } } } },
+        attachments: { include: { uploader: { select: { name: true } } } },
+      },
       orderBy: { createdAt: "asc" },
     }),
   ]);
+
+  // Sections/Board/Timeline/Files only ever show active Items — Archived
+  // Items are browsable via their own filter/toggle inside the List and
+  // Board views instead (#38).
+  const items = allItems.filter((item) => item.state !== "ARCHIVED");
+  const archivedItems = allItems
+    .filter((item) => item.state === "ARCHIVED")
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 
   const existingListRoleUserIds = new Set(
     [...roles.leads, ...roles.members, ...roles.viewers].map((entry) => entry.userId)
@@ -162,6 +180,19 @@ export async function loadListPageData(
       dueDate: item.dueDate,
     }))
   );
+  const filesViewEntries = buildFilesViewEntries(
+    items.map((item) => ({
+      id: item.id,
+      title: item.title,
+      attachments: item.attachments.map((attachment) => ({
+        id: attachment.id,
+        fileName: attachment.fileName,
+        sizeBytes: attachment.sizeBytes,
+        uploaderName: attachment.uploader.name,
+        createdAt: attachment.createdAt,
+      })),
+    }))
+  );
 
   return {
     listId: list.id,
@@ -182,10 +213,12 @@ export async function loadListPageData(
       items: itemsBySectionId.get(section.id) ?? [],
     })),
     unsectionedItems,
+    archivedItems: archivedItems.map(toItemSummary),
     groupBy: list.groupBy,
     boardGroupBy,
     boardColumns,
     assignableMembers,
     timelineItems,
+    filesViewEntries,
   };
 }

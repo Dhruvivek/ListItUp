@@ -7,7 +7,7 @@ import { addAssignee, removeAssignee } from "@/lib/item/item-assignment";
 import { setCustomFieldValue } from "@/lib/item/item-custom-fields";
 import { createItem } from "@/lib/item/item-creation";
 import { createDependency, removeDependency } from "@/lib/item/item-dependencies";
-import { isValidItemState, transitionItemState, updateItem } from "@/lib/item/item-lifecycle";
+import { archiveItem, isValidItemState, restoreItem, transitionItemState, updateItem } from "@/lib/item/item-lifecycle";
 import { applyLabel, removeLabel } from "@/lib/item/item-labels";
 import { createNote, upsertPersonalNote } from "@/lib/item/item-notes";
 import { createCustomFieldDefinition } from "@/lib/list/list-custom-fields";
@@ -64,6 +64,29 @@ export async function transitionItemStateAction(
     state: state as ItemState,
     blockerReason: blockerReason || undefined,
   });
+  revalidatePath(itemPath(workspaceId, listId, itemId));
+}
+
+// Archiving/restoring use lib/item/'s dedicated archiveItem/restoreItem —
+// not transitionItemState — so the prior state (and BlockerReason) survive
+// the round trip (#38).
+export async function archiveItemAction(
+  workspaceId: string,
+  listId: string,
+  itemId: string
+): Promise<void> {
+  const session = await requireAuthenticatedSession(itemPath(workspaceId, listId, itemId));
+  await archiveItem(prisma, { actorUserId: session.user.id, itemId });
+  revalidatePath(itemPath(workspaceId, listId, itemId));
+}
+
+export async function restoreItemAction(
+  workspaceId: string,
+  listId: string,
+  itemId: string
+): Promise<void> {
+  const session = await requireAuthenticatedSession(itemPath(workspaceId, listId, itemId));
+  await restoreItem(prisma, { actorUserId: session.user.id, itemId });
   revalidatePath(itemPath(workspaceId, listId, itemId));
 }
 

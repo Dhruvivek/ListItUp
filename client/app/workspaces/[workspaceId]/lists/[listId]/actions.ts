@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import type { ListMemberRole } from "@/generated/prisma/client";
 import { createItem } from "@/lib/item/item-creation";
+import { restoreItem } from "@/lib/item/item-lifecycle";
 import { isValidBoardGroupBy, moveItemToColumn, setBoardGroupBy, type BoardGroupBy } from "@/lib/list/list-board";
 import { grantGuestAccess, revokeGuestAccess } from "@/lib/list/list-guests";
 import { updateListDescription } from "@/lib/list/list-lifecycle";
@@ -207,6 +208,19 @@ export async function addItemAction(
     title,
     sectionId: sectionId ?? undefined,
   });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+// The List/Board Archived toggle only Restores (Archiving happens from the
+// Item detail page) — uses lib/item/'s dedicated restoreItem, not a new
+// mutation (#38).
+export async function restoreItemAction(
+  workspaceId: string,
+  listId: string,
+  itemId: string
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+  await restoreItem(prisma, { actorUserId: session.user.id, itemId });
   revalidatePath(listPath(workspaceId, listId));
 }
 

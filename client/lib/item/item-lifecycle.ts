@@ -101,16 +101,57 @@ export async function transitionItemState(
   return { status: "transitioned" };
 }
 
+// Archiving suspends an Item without going through transitionItemState's
+// generic BLOCKED/blockerReason rules: it stashes the current state in
+// stateBeforeArchive and otherwise leaves every field (including
+// blockerReason) untouched, so restoreItem can put the Item back exactly
+// as it was (#38).
 export async function archiveItem(
   database: PrismaClient,
   input: { actorUserId: string; itemId: string }
 ): Promise<TransitionItemStateResult> {
-  return transitionItemState(database, { ...input, state: "ARCHIVED" });
+  const { actorUserId, itemId } = input;
+
+  const item = await database.item.findUnique({ where: { id: itemId } });
+  if (!item) {
+    return { status: "item-not-found" };
+  }
+
+  const access = await resolveItemAccess(database, { userId: actorUserId, itemId });
+  if (!meetsListAccessLevel(access, REQUIRED_ACCESS_LEVEL)) {
+    return { status: "forbidden" };
+  }
+
+  await database.item.update({
+    where: { id: itemId },
+    data: { state: "ARCHIVED", stateBeforeArchive: item.state },
+  });
+
+  return { status: "transitioned" };
 }
 
 export async function restoreItem(
   database: PrismaClient,
   input: { actorUserId: string; itemId: string }
 ): Promise<TransitionItemStateResult> {
-  return transitionItemState(database, { ...input, state: "TO_DO" });
+  const { actorUserId, itemId } = input;
+
+  const item = await database.item.findUnique({ where: { id: itemId } });
+  if (!item) {
+    return { status: "item-not-found" };
+  }
+
+  const access = await resolveItemAccess(database, { userId: actorUserId, itemId });
+  if (!meetsListAccessLevel(access, REQUIRED_ACCESS_LEVEL)) {
+    return { status: "forbidden" };
+  }
+
+  await database.item.update({
+    where: { id: itemId },
+    // Falls back to TO_DO for an Item archived before stateBeforeArchive
+    // existed, or archived some other way that didn't set it.
+    data: { state: item.stateBeforeArchive ?? "TO_DO", stateBeforeArchive: null },
+  });
+
+  return { status: "transitioned" };
 }
