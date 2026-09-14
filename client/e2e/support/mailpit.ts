@@ -1,32 +1,38 @@
 const MAILPIT_POLL_ATTEMPTS = 30;
 const MAILPIT_POLL_INTERVAL_MS = 250;
 
-type MailpitMessage = {
+export type MailpitMessage = {
   ID?: string;
   id?: string;
-  Subject?: string;
   To?: Array<{ Address?: string }>;
 };
 
 function mailpitApiUrl(): string {
   const mailpitUrl = process.env.MAILPIT_API_URL;
-  if (!mailpitUrl) throw new Error("MAILPIT_API_URL must be set for browser tests.");
+  if (!mailpitUrl)
+    throw new Error("MAILPIT_API_URL must be set for browser tests.");
 
   return mailpitUrl;
 }
 
-export async function mailpitMessagesFor(email: string): Promise<MailpitMessage[]> {
+export async function mailpitMessagesFor(
+  email: string
+): Promise<MailpitMessage[]> {
   const response = await fetch(`${mailpitApiUrl()}/api/v1/messages`);
   const body = (await response.json()) as { messages?: MailpitMessage[] };
 
-  return body.messages?.filter((message) =>
-    message.To?.some((recipient) => recipient.Address === email)
-  ) ?? [];
+  return (
+    body.messages?.filter((message) =>
+      message.To?.some((recipient) => recipient.Address === email)
+    ) ?? []
+  );
 }
 
-export function mailpitMessageIds(messages: MailpitMessage[]): Set<string> {
+export async function knownMailpitMessageIds(
+  email: string
+): Promise<Set<string>> {
   return new Set(
-    messages
+    (await mailpitMessagesFor(email))
       .map((message) => message.ID ?? message.id)
       .filter((id): id is string => Boolean(id))
   );
@@ -50,7 +56,12 @@ export async function waitForMailpitLink(
       const link = content.match(/http:\/\/[^\s"\\]+/);
       if (link) return link[0].replace(/\\u0026/g, "&");
     }
-    await new Promise((resolve) => setTimeout(resolve, MAILPIT_POLL_INTERVAL_MS));
+    await new Promise((resolve) =>
+      setTimeout(resolve, MAILPIT_POLL_INTERVAL_MS)
+    );
   }
-  throw new Error(`Mailpit did not receive an authentication link for ${email}.`);
+
+  throw new Error(
+    `Mailpit did not receive an authentication link for ${email}.`
+  );
 }

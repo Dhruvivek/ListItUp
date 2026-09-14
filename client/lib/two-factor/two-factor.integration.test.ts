@@ -284,6 +284,9 @@ async function run() {
       (send) => send.to === email && send.type === "password-reset"
     );
     assert.ok(resetSend);
+    // The built-in request-password-reset endpoint emails better-auth's own
+    // first-hop link (token as the last path segment); see the comment on
+    // extractToken in password-reset.integration.test.ts for why.
     const resetToken = new URL(extractUrl(resetSend!.template.text)).pathname
       .split("/")
       .filter(Boolean)

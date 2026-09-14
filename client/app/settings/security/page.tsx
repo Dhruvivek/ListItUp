@@ -52,7 +52,10 @@ export default async function SecuritySettingsPage() {
           <SessionsList sessions={sessions} />
         </section>
 
-        <section className="mt-10 border-t border-[#1a1a1a] pt-10">
+        <section
+          id="two-factor-section"
+          className="mt-10 border-t border-[#1a1a1a] pt-10"
+        >
           <h2 className="mb-4 text-lg font-light text-white">
             Two-factor authentication
           </h2>

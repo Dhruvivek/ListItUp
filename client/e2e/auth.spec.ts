@@ -1,47 +1,48 @@
 import { expect, test } from "@playwright/test";
 
-import { mailpitMessageIds, mailpitMessagesFor, waitForMailpitLink } from "./support/mailpit";
+import { signUp, signUpAndVerify, uniqueTestUser } from "./support/auth-flows";
+import { knownMailpitMessageIds, waitForMailpitLink } from "./support/mailpit";
 
-test("a User can sign up, verify through Mailpit, and reach My Tasks", async ({ page }) => {
-  const email = `browser-${Date.now()}@example.test`;
-  await page.goto("/sign-up");
-  await page.getByLabel("Display Name").fill("Browser User");
-  await page.getByLabel("Email").fill(email);
-  await page.getByRole("textbox", { name: "Password" }).fill("a-long-browser-password");
-  await page.getByRole("button", { name: "Create account" }).click();
+test("a User can sign up, verify through Mailpit, and reach My Tasks", async ({
+  page,
+}) => {
+  const user = uniqueTestUser("browser");
+
+  await signUp(page, user);
   await expect(page).toHaveURL(/verify-email/);
 
-  await page.goto(await waitForMailpitLink(email));
+  await page.goto(await waitForMailpitLink(user.email));
   await expect(page).toHaveURL(/my-tasks/);
 });
 
-test("a verified User can sign in with a password and a Mailpit magic link", async ({ page, context }) => {
-  const email = `browser-sign-in-${Date.now()}@example.test`;
-  const password = "a-long-browser-password";
+test("a verified User can sign in with a password and a Mailpit magic link", async ({
+  page,
+  context,
+}) => {
+  const user = uniqueTestUser("browser-sign-in");
 
-  await page.goto("/sign-up");
-  await page.getByLabel("Display Name").fill("Browser Sign In User");
-  await page.getByLabel("Email").fill(email);
-  await page.getByRole("textbox", { name: "Password" }).fill(password);
-  await page.getByRole("button", { name: "Create account" }).click();
-  await page.goto(await waitForMailpitLink(email));
+  await signUpAndVerify(page, user);
   await expect(page).toHaveURL(/my-tasks/);
 
   await context.clearCookies();
   await page.goto("/sign-in");
-  await page.getByLabel("Email").fill(email);
-  await page.getByRole("textbox", { name: "Password" }).fill(password);
+  await page.getByLabel("Email").fill(user.email);
+  await page.getByRole("textbox", { name: "Password" }).fill(user.password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/my-tasks/);
 
   await context.clearCookies();
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Email magic link" }).click();
-  await expect(page.getByRole("button", { name: "Send sign-in link" })).toBeVisible();
-  await page.getByLabel("Email").fill(email);
-  const knownMessageIds = mailpitMessageIds(await mailpitMessagesFor(email));
+  await expect(
+    page.getByRole("button", { name: "Send sign-in link" })
+  ).toBeVisible();
+  await page.getByLabel("Email").fill(user.email);
+  const knownMessageIds = await knownMailpitMessageIds(user.email);
   await page.getByRole("button", { name: "Send sign-in link" }).click();
-  await expect(page.getByRole("status")).toContainText("sign-in link is on its way");
-  await page.goto(await waitForMailpitLink(email, knownMessageIds));
+  await expect(page.getByRole("status")).toContainText(
+    "sign-in link is on its way"
+  );
+  await page.goto(await waitForMailpitLink(user.email, knownMessageIds));
   await expect(page).toHaveURL(/my-tasks/);
 });

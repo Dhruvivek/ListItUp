@@ -1,12 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
 
-import {
-  BASE_URL,
-  SMTP_FAILURE_BASE_URL,
-  SMTP_FAILURE_PORT,
-  UNREACHABLE_SMTP_HOST,
-  UNREACHABLE_SMTP_PORT,
-} from "./e2e/support/config";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:4173";
+const smtpFailureBaseURL =
+  process.env.PLAYWRIGHT_SMTP_FAILURE_BASE_URL ?? "http://127.0.0.1:4174";
+// An unreachable local port: real SMTP-failure browser coverage needs a
+// server whose mailer genuinely cannot deliver, not a mocked send.
+const UNREACHABLE_SMTP_PORT = "65500";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -17,29 +16,41 @@ export default defineConfig({
   // route compilation — longer than the 30s/5s defaults comfortably cover.
   timeout: 60_000,
   expect: { timeout: 15_000 },
-  use: { baseURL: BASE_URL, trace: "retain-on-failure" },
+  reporter: [["list"], ["html", { open: "never" }]],
+  use: { baseURL, trace: "retain-on-failure", screenshot: "only-on-failure" },
   webServer: [
     {
       command: "pnpm dev -p 4173",
       env: {
         ...process.env,
-        BETTER_AUTH_URL: BASE_URL,
+        BETTER_AUTH_URL: baseURL,
       },
-      url: BASE_URL,
+      url: baseURL,
       reuseExistingServer: false,
     },
     {
-      command: `pnpm dev -p ${SMTP_FAILURE_PORT}`,
+      command: "pnpm dev -p 4174",
       env: {
         ...process.env,
-        BETTER_AUTH_URL: SMTP_FAILURE_BASE_URL,
-        NEXT_DIST_DIR: ".next-smtp-failure",
-        SMTP_HOST: UNREACHABLE_SMTP_HOST,
+        BETTER_AUTH_URL: smtpFailureBaseURL,
+        SMTP_HOST: "127.0.0.1",
         SMTP_PORT: UNREACHABLE_SMTP_PORT,
+        NEXT_DIST_DIR: ".next-smtp-failure",
       },
-      url: SMTP_FAILURE_BASE_URL,
+      url: smtpFailureBaseURL,
       reuseExistingServer: false,
     },
   ],
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: "chromium",
+      testIgnore: /smtp-failure\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "chromium-smtp-failure",
+      testMatch: /smtp-failure\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], baseURL: smtpFailureBaseURL },
+    },
+  ],
 });

@@ -31,6 +31,13 @@ function extractUrl(text: string): string {
   return match[0];
 }
 
+// Requesting a reset through the built-in /api/auth/request-password-reset
+// endpoint (as these tests do) emails better-auth's own first-hop link,
+// which carries the token as the last path segment
+// (/reset-password/<token>?callbackURL=...) — better-auth's own GET
+// /reset-password/:token route validates it and redirects on to the app's
+// callbackURL with ?token= attached. That validating hop is what these
+// tests intentionally bypass by extracting the token directly.
 function extractToken(resetUrl: string): string {
   const url = new URL(resetUrl);
   const segments = url.pathname.split("/").filter(Boolean);
