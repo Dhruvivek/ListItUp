@@ -2,6 +2,8 @@ import { base32 } from "@better-auth/utils/base32";
 import { createOTP } from "@better-auth/utils/otp";
 import { expect, type Page } from "@playwright/test";
 
+import { pageAlert } from "./locators";
+
 export interface EnrolledTwoFactor {
   secret: string;
   backupCodes: string[];
@@ -52,28 +54,41 @@ export async function enrollTwoFactorViaUI(
   const enabledNotice = section.getByText(
     "Two-factor authentication is enabled on your account."
   );
+  const errorAlert = pageAlert(page);
 
-  // A cold Next.js dev-mode compile of this Server Action can take long
-  // enough, under CI load, for a precomputed 30s TOTP code to go stale
-  // before the server verifies it (confirmation also awaits a
-  // security-notice email send before returning). Recompute and retry
-  // rather than race a compile we don't control.
+  // A cold Next.js dev-mode compile of this Server Action, plus its
+  // synchronous security-notice email send, can be slow under CI load — so
+  // wait generously for a definitive outcome (confirmed or a rendered
+  // error) rather than a bare timeout. Only retry with a fresh code once an
+  // error has actually rendered: that's the one signal that the previous
+  // submission has fully settled, so a retry can never double-submit while
+  // the prior request might still be in flight server-side.
   const MAX_ATTEMPTS = 3;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     await codeField.fill(await currentTotpCode(secret));
     await confirmButton.click();
 
-    const confirmed = await enabledNotice
-      .waitFor({ state: "visible", timeout: 15_000 })
-      .then(() => true)
-      .catch(() => false);
+    const outcome = await Promise.race([
+      enabledNotice
+        .waitFor({ state: "visible", timeout: 45_000 })
+        .then(() => "confirmed" as const),
+      errorAlert
+        .waitFor({ state: "visible", timeout: 45_000 })
+        .then(() => "error" as const),
+    ]).catch(() => "timeout" as const);
 
-    if (confirmed) {
+    if (outcome === "confirmed") {
       return { secret, backupCodes };
+    }
+
+    if (outcome === "timeout") {
+      throw new Error(
+        "2FA enrollment confirmation neither succeeded nor showed an error within 45s"
+      );
     }
   }
 
   throw new Error(
-    `2FA enrollment confirmation did not succeed after ${MAX_ATTEMPTS} attempts`
+    `2FA enrollment confirmation kept failing after ${MAX_ATTEMPTS} attempts`
   );
 }
