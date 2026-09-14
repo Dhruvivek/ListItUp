@@ -53,7 +53,10 @@ export function TwoFactorSettings({
             alt="Two-factor authentication QR code"
             className="mb-3 h-48 w-48 border border-[#1a1a1a] bg-white p-2"
           />
-          <p className="break-all font-mono text-xs text-neutral-500">
+          <p
+            data-testid="totp-manual-secret"
+            className="break-all font-mono text-xs text-neutral-500"
+          >
             {enableState.manualSecret}
           </p>
         </div>
