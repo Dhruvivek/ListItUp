@@ -32,7 +32,7 @@ export async function requestPasswordResetEmail(
 
   const baseUrl = process.env.BETTER_AUTH_URL;
   if (!baseUrl) throw new Error("BETTER_AUTH_URL must be set.");
-  const resetUrl = `${baseUrl}/reset-password/${token}?callbackURL=${encodeURIComponent("/reset-password")}`;
+  const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(token)}&callbackURL=${encodeURIComponent("/reset-password")}`;
   const result = await mailer.send({
     to: user.email,
     type: "password-reset",

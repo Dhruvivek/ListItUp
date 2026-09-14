@@ -32,9 +32,10 @@ function extractUrl(text: string): string {
 
 function extractToken(resetUrl: string): string {
   const url = new URL(resetUrl);
-  const segments = url.pathname.split("/").filter(Boolean);
+  const token = url.searchParams.get("token");
+  assert.ok(token, "reset url must carry a token query param");
 
-  return segments[segments.length - 1];
+  return token!;
 }
 
 async function run() {
