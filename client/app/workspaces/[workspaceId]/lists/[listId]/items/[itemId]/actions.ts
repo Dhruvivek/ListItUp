@@ -9,6 +9,7 @@ import { createItem } from "@/lib/item/item-creation";
 import { createDependency, removeDependency } from "@/lib/item/item-dependencies";
 import { isValidItemState, transitionItemState, updateItem } from "@/lib/item/item-lifecycle";
 import { applyLabel, removeLabel } from "@/lib/item/item-labels";
+import { createNote, upsertPersonalNote } from "@/lib/item/item-notes";
 import { createCustomFieldDefinition } from "@/lib/list/list-custom-fields";
 import { createLabel } from "@/lib/list/list-labels";
 import { prisma } from "@/lib/prisma";
@@ -232,5 +233,40 @@ export async function removeItemDependencyAction(
 ): Promise<void> {
   const session = await requireAuthenticatedSession(itemPath(workspaceId, listId, itemId));
   await removeDependency(prisma, { actorUserId: session.user.id, blockerId, blockedId });
+  revalidatePath(itemPath(workspaceId, listId, itemId));
+}
+
+export async function addNoteAction(
+  workspaceId: string,
+  listId: string,
+  itemId: string,
+  formData: FormData
+): Promise<void> {
+  const session = await requireAuthenticatedSession(itemPath(workspaceId, listId, itemId));
+  const body = String(formData.get("body") ?? "").trim();
+  const mentionedUserIds = formData.getAll("mentionedUserIds").map((value) => String(value));
+
+  if (!body) {
+    return;
+  }
+
+  await createNote(prisma, { actorUserId: session.user.id, itemId, body, mentionedUserIds });
+  revalidatePath(itemPath(workspaceId, listId, itemId));
+}
+
+export async function upsertPersonalNoteAction(
+  workspaceId: string,
+  listId: string,
+  itemId: string,
+  formData: FormData
+): Promise<void> {
+  const session = await requireAuthenticatedSession(itemPath(workspaceId, listId, itemId));
+  const body = String(formData.get("body") ?? "").trim();
+
+  if (!body) {
+    return;
+  }
+
+  await upsertPersonalNote(prisma, { actorUserId: session.user.id, itemId, body });
   revalidatePath(itemPath(workspaceId, listId, itemId));
 }

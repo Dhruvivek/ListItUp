@@ -7,6 +7,7 @@ import {
   addChildItemAction,
   addItemAssigneeAction,
   addItemDependencyAction,
+  addNoteAction,
   applyExistingLabelAction,
   createAndApplyLabelAction,
   defineCustomFieldAction,
@@ -16,12 +17,14 @@ import {
   setItemCustomFieldValueAction,
   transitionItemStateAction,
   updateItemDetailsAction,
+  upsertPersonalNoteAction,
 } from "./actions";
 import { loadItemDetailData } from "./page-data";
 import { StateControl } from "./StateControl";
 
 type Props = {
   params: Promise<{ workspaceId: string; listId: string; itemId: string }>;
+  searchParams: Promise<{ attachmentError?: string }>;
 };
 
 const STATE_LABEL: Record<string, string> = {
@@ -32,8 +35,28 @@ const STATE_LABEL: Record<string, string> = {
   ARCHIVED: "Archived",
 };
 
-export default async function ItemDetailPage({ params }: Props) {
+// Keyed by the Route Handler's ?attachmentError= value (#39).
+const ATTACHMENT_ERROR_MESSAGE: Record<string, string> = {
+  "missing-file": "Choose a file to attach.",
+  "type-not-allowed": "That file type isn't supported. Allowed: ZIP, images, PDFs, and common office documents.",
+  "too-large": "That file is over the 1GB limit.",
+  forbidden: "You don't have permission to attach files to this Item.",
+  "item-not-found": "This Item no longer exists.",
+};
+
+function formatFileSize(sizeBytes: number): string {
+  if (sizeBytes < 1024) {
+    return `${sizeBytes} B`;
+  }
+  if (sizeBytes < 1024 * 1024) {
+    return `${(sizeBytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export default async function ItemDetailPage({ params, searchParams }: Props) {
   const { workspaceId, listId, itemId } = await params;
+  const { attachmentError } = await searchParams;
   const session = await requireAuthenticatedSession(
     `/workspaces/${workspaceId}/lists/${listId}/items/${itemId}`
   );
@@ -58,6 +81,8 @@ export default async function ItemDetailPage({ params }: Props) {
   const boundAddDependency = addItemDependencyAction.bind(null, workspaceId, listId, itemId);
   const boundRemoveDependency = (blockerId: string, blockedId: string) =>
     removeItemDependencyAction.bind(null, workspaceId, listId, itemId, blockerId, blockedId);
+  const boundAddNote = addNoteAction.bind(null, workspaceId, listId, itemId);
+  const boundUpsertPersonalNote = upsertPersonalNoteAction.bind(null, workspaceId, listId, itemId);
 
   const unassignedMembers = data.assignableMembers.filter(
     (member) => !data.assignees.some((assignee) => assignee.userId === member.userId)
@@ -479,6 +504,133 @@ export default async function ItemDetailPage({ params }: Props) {
             </form>
           )}
         </div>
+
+        <div className="mt-8">
+          <div className="mb-2 font-mono text-[11px] uppercase tracking-wider text-neutral-500">
+            Attachments
+          </div>
+
+          {attachmentError && (
+            <p className="mb-2 text-sm text-[#ff8a70]">
+              {ATTACHMENT_ERROR_MESSAGE[attachmentError] ?? "Couldn't attach that file."}
+            </p>
+          )}
+
+          <ul className="flex flex-col gap-1.5">
+            {data.attachments.map((attachment) => (
+              <li key={attachment.id} className="flex items-center justify-between gap-2 text-sm">
+                <a
+                  href={`/api/workspaces/${workspaceId}/lists/${listId}/items/${itemId}/attachments/${attachment.id}`}
+                  className="truncate text-neutral-300 hover:text-white hover:underline"
+                >
+                  {attachment.fileName}
+                </a>
+                <span className="flex-shrink-0 text-xs text-neutral-600">
+                  {formatFileSize(attachment.sizeBytes)} · {attachment.uploaderName}
+                </span>
+              </li>
+            ))}
+            {data.attachments.length === 0 && <li className="text-sm text-neutral-600">None yet.</li>}
+          </ul>
+
+          {data.canEdit && (
+            <form
+              action={`/api/workspaces/${workspaceId}/lists/${listId}/items/${itemId}/attachments`}
+              method="POST"
+              encType="multipart/form-data"
+              className="mt-3 flex items-center gap-2"
+            >
+              <input
+                type="file"
+                name="file"
+                required
+                className="flex-1 text-sm text-neutral-400 file:mr-3 file:rounded-md file:border file:border-neutral-700 file:bg-[#141414] file:px-3 file:py-1.5 file:text-sm file:text-neutral-200"
+              />
+              <button
+                type="submit"
+                className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:border-[#ff6b4a] hover:text-white"
+              >
+                Attach
+              </button>
+            </form>
+          )}
+        </div>
+
+        <div className="mt-8">
+          <div className="mb-2 font-mono text-[11px] uppercase tracking-wider text-neutral-500">Notes</div>
+
+          <ul className="flex flex-col gap-3">
+            {data.notes.map((note) => (
+              <li key={note.id} className="rounded-md border border-neutral-800 bg-[#0e0e0e] px-3 py-2">
+                <div className="flex items-center justify-between text-xs text-neutral-500">
+                  <span>{note.authorName}</span>
+                  <span>{note.createdAt.toLocaleString()}</span>
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-neutral-200">{note.body}</p>
+                {note.mentions.length > 0 && (
+                  <p className="mt-1.5 text-xs text-[#ff8a70]">
+                    {note.mentions.map((mention) => `@${mention.name}`).join(" ")}
+                  </p>
+                )}
+              </li>
+            ))}
+            {data.notes.length === 0 && <li className="text-sm text-neutral-600">None yet.</li>}
+          </ul>
+
+          {data.canEdit && (
+            <form action={boundAddNote} className="mt-3 flex flex-col gap-2">
+              <textarea
+                name="body"
+                placeholder="Add a Note…"
+                required
+                rows={2}
+                className="w-full rounded-md border border-neutral-700 bg-[#141414] px-3 py-1.5 text-sm text-neutral-200 placeholder:text-neutral-600 focus:border-[#ff6b4a] focus:outline-none"
+              />
+              {data.mentionCandidates.length > 0 && (
+                <div className="flex flex-wrap gap-3">
+                  {data.mentionCandidates.map((candidate) => (
+                    <label key={candidate.userId} className="flex items-center gap-1.5 text-xs text-neutral-400">
+                      <input type="checkbox" name="mentionedUserIds" value={candidate.userId} />
+                      @{candidate.name}
+                    </label>
+                  ))}
+                </div>
+              )}
+              <button
+                type="submit"
+                className="self-start rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:border-[#ff6b4a] hover:text-white"
+              >
+                Add Note
+              </button>
+            </form>
+          )}
+        </div>
+
+        {data.isAssignee && (
+          <div className="mt-8">
+            <div className="mb-1 flex items-center gap-2">
+              <span className="font-mono text-[11px] uppercase tracking-wider text-neutral-500">
+                Personal Note
+              </span>
+              <span className="text-[11px] text-neutral-600">Only you can see this</span>
+            </div>
+            <form action={boundUpsertPersonalNote} className="flex flex-col gap-2">
+              <textarea
+                name="body"
+                defaultValue={data.personalNote ?? ""}
+                placeholder="Private planning notes…"
+                rows={2}
+                className="w-full rounded-md border border-neutral-700 bg-[#141414] px-3 py-1.5 text-sm text-neutral-200 placeholder:text-neutral-600 focus:border-[#ff6b4a] focus:outline-none"
+              />
+              <button
+                type="submit"
+                className="self-start rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:border-[#ff6b4a] hover:text-white"
+              >
+                Save
+              </button>
+            </form>
+          </div>
+        )}
 
         <div className="mt-8 text-xs text-neutral-600">Created by {data.creatorName}</div>
 

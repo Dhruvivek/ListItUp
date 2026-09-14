@@ -25,6 +25,10 @@ model User {
   starredLists     Starred[]
   createdItems     Item[]           @relation("ItemCreator")
   itemAssignments  ItemAssignee[]
+  uploadedAttachments Attachment[]
+  authoredNotes    Note[]         @relation("NoteAuthor")
+  mentions         Mention[]      @relation("MentionedUser")
+  personalNotes    PersonalNote[] @relation("PersonalNoteOwner")
   platformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentUser")
   grantedPlatformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentGranter")
   revokedPlatformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentRevoker")
@@ -279,6 +283,11 @@ model Item {
   startDate DateTime?
   dueDate   DateTime?
   state     ItemState    @default(TO_DO)
+  // The state to return to on restore, set by archiveItem() and cleared by
+  // restoreItem() (#38) — Item has no separate archivedAt timestamp like
+  // List, so "archived" is state === ARCHIVED and this is the only place
+  // the prior state survives the overwrite.
+  stateBeforeArchive ItemState?
   priority  ItemPriority @default(NORMAL)
   // Required when state is BLOCKED (enforced at the application layer in
   // lib/item/, not at the schema level).
@@ -302,6 +311,9 @@ model Item {
   // (#35).
   blocking  ItemDependency[] @relation("DependencyBlocker")
   blockedBy ItemDependency[] @relation("DependencyBlocked")
+  attachments Attachment[]
+  notes         Note[]
+  personalNotes PersonalNote[]
 
   @@index([listId])
   @@index([sectionId])
@@ -410,6 +422,77 @@ model ItemDependency {
   @@unique([blockerId, blockedId])
   @@index([blockedId])
   @@map("item_dependency")
+}
+
+// A List Member can attach a file to an Item (#39). Metadata + storageKey
+// only — lib/item/ never touches file bytes; the Route Handler upload
+// transport writes to S3-compatible storage (ADR 0002) and hands this
+// model its storageKey. No preview rendering or malware scanning in v1
+// (#40); ZIP contents stay download-only.
+model Attachment {
+  id          String   @id
+  itemId      String
+  uploaderId  String
+  fileName    String
+  contentType String
+  sizeBytes   Int
+  storageKey  String
+  createdAt   DateTime @default(now())
+  item        Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  uploader    User     @relation(fields: [uploaderId], references: [id])
+
+  @@index([itemId])
+  @@map("attachment")
+}
+
+// A team-visible text update on an Item (#37) — Comment/reply/thread are
+// deliberately avoided terms per CONTEXT.md's Note entry: no nested replies
+// in v1.
+model Note {
+  id        String    @id
+  itemId    String
+  authorId  String
+  body      String
+  createdAt DateTime  @default(now())
+  item      Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  author    User      @relation("NoteAuthor", fields: [authorId], references: [id])
+  mentions  Mention[]
+
+  @@index([itemId])
+  @@map("note")
+}
+
+// A `@name` reference to a User inside a Note's body, validated at write
+// time (lib/item/) against Users who already have access to the Note's
+// Item — mentioning is never itself a grant of access (#37).
+model Mention {
+  id        String   @id
+  noteId    String
+  userId    String
+  createdAt DateTime @default(now())
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  user      User     @relation("MentionedUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([noteId, userId])
+  @@index([userId])
+  @@map("mention")
+}
+
+// A private, per-User-per-Item planning note (#37) — visible only to its
+// owning User and never surfaced on the shared Item, distinct from the
+// team-visible Note above.
+model PersonalNote {
+  id        String   @id
+  itemId    String
+  userId    String
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  user      User     @relation("PersonalNoteOwner", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, userId])
+  @@map("personal_note")
 }
 
 // Better Auth's email-verification tokens are stateless signed JWTs and are

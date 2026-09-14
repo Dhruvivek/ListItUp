@@ -1,4 +1,5 @@
 import type { CustomFieldType, ItemPriority, ItemState, PrismaClient } from "@/generated/prisma/client";
+import { getPersonalNote } from "@/lib/item/item-notes";
 import { resolveItemAccess } from "@/lib/permissions/item-access";
 import { meetsListAccessLevel } from "@/lib/permissions/list-access";
 
@@ -56,6 +57,26 @@ export type ItemDetailData = {
   // functions themselves; this UI list just doesn't offer a cross-List
   // picker yet.
   sameListItems: { id: string; title: string }[];
+  // Attachments on this Item (#39), newest first — no preview rendering,
+  // just the file name/size and a download link to the storage key.
+  attachments: { id: string; fileName: string; sizeBytes: number; uploaderName: string; createdAt: Date }[];
+  // Notes (#37), oldest first, with their Mentions resolved to display
+  // names. mentionCandidates is the Item's access list per CONTEXT.md's
+  // Mention entry (Assignees, and the List's Members/Leads/Viewers/Guests)
+  // — the UI's @mention picker; the authoritative check still lives in
+  // createNote(), which validates against resolveItemAccess() directly.
+  notes: {
+    id: string;
+    authorName: string;
+    body: string;
+    createdAt: Date;
+    mentions: { userId: string; name: string }[];
+  }[];
+  mentionCandidates: { userId: string; name: string }[];
+  // This User's own Personal Note (#37) — null if they haven't written one,
+  // never another User's. Only offered when isAssignee is true.
+  personalNote: string | null;
+  isAssignee: boolean;
 };
 
 // Kept separate from the page component (same rationale as the List page's
@@ -79,6 +100,17 @@ export async function loadItemDetailData(
       customFieldValues: true,
       blocking: { include: { blocked: { select: { id: true, title: true, listId: true } } } },
       blockedBy: { include: { blocker: { select: { id: true, title: true, listId: true } } } },
+      attachments: {
+        include: { uploader: { select: { name: true } } },
+        orderBy: { createdAt: "desc" },
+      },
+      notes: {
+        include: {
+          author: { select: { name: true } },
+          mentions: { include: { user: { select: { id: true, name: true } } } },
+        },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
 
@@ -91,11 +123,34 @@ export async function loadItemDetailData(
     return null;
   }
 
-  const [sections, listMembers, workspaceMembership, workspaceLabels, customFieldDefinitions, otherListItems] =
-    await Promise.all([
+  const [
+    sections,
+    listMembers,
+    allListMembers,
+    guests,
+    workspaceMembership,
+    workspaceLabels,
+    customFieldDefinitions,
+    otherListItems,
+    personalNote,
+  ] = await Promise.all([
     database.section.findMany({ where: { listId }, orderBy: { order: "asc" }, select: { id: true, name: true } }),
     database.listMember.findMany({
       where: { listId, role: { in: ["LEAD", "MEMBER"] } },
+      include: { user: { select: { id: true, name: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+    // Unlike assignableMembers above, this includes Viewers too — Mention
+    // candidates are anyone with Item access, not just sensible Assignees
+    // (CONTEXT.md's Mention entry: Assignees, or the List's
+    // Members/Leads/Viewers/Guests).
+    database.listMember.findMany({
+      where: { listId },
+      include: { user: { select: { id: true, name: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+    database.guest.findMany({
+      where: { listId },
       include: { user: { select: { id: true, name: true } } },
       orderBy: { createdAt: "asc" },
     }),
@@ -109,6 +164,7 @@ export async function loadItemDetailData(
       select: { id: true, title: true },
       orderBy: { createdAt: "asc" },
     }),
+    getPersonalNote(database, { actorUserId: userId, itemId }),
   ]);
 
   const appliedLabelIds = new Set(item.labels.map((itemLabel) => itemLabel.labelId));
@@ -116,6 +172,18 @@ export async function loadItemDetailData(
     ...item.blocking.map((dependency) => dependency.blocked.id),
     ...item.blockedBy.map((dependency) => dependency.blocker.id),
   ]);
+
+  const mentionCandidatesById = new Map<string, { userId: string; name: string }>();
+  for (const assignee of item.assignees) {
+    mentionCandidatesById.set(assignee.userId, { userId: assignee.userId, name: assignee.user.name });
+  }
+  for (const member of allListMembers) {
+    mentionCandidatesById.set(member.userId, { userId: member.userId, name: member.user.name });
+  }
+  for (const guest of guests) {
+    mentionCandidatesById.set(guest.userId, { userId: guest.userId, name: guest.user.name });
+  }
+  mentionCandidatesById.delete(userId);
 
   return {
     itemId: item.id,
@@ -146,5 +214,22 @@ export async function loadItemDetailData(
     blocking: item.blocking.map((dependency) => dependency.blocked),
     blockedBy: item.blockedBy.map((dependency) => dependency.blocker),
     sameListItems: otherListItems.filter((candidate) => !linkedItemIds.has(candidate.id)),
+    attachments: item.attachments.map((attachment) => ({
+      id: attachment.id,
+      fileName: attachment.fileName,
+      sizeBytes: attachment.sizeBytes,
+      uploaderName: attachment.uploader.name,
+      createdAt: attachment.createdAt,
+    })),
+    notes: item.notes.map((note) => ({
+      id: note.id,
+      authorName: note.author.name,
+      body: note.body,
+      createdAt: note.createdAt,
+      mentions: note.mentions.map((mention) => ({ userId: mention.user.id, name: mention.user.name })),
+    })),
+    mentionCandidates: [...mentionCandidatesById.values()],
+    personalNote: personalNote?.body ?? null,
+    isAssignee: item.assignees.some((assignee) => assignee.userId === userId),
   };
 }
