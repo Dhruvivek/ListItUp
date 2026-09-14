@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { signUpAndVerify, uniqueTestUser } from "./support/auth-flows";
+import { pageAlert } from "./support/locators";
 
 const WRONG_PASSWORD = "definitely-the-wrong-password";
 
@@ -17,9 +18,7 @@ test("repeated password failures temporarily restrict sign-in, even with the cor
     await page.getByLabel("Email").fill(user.email);
     await page.getByRole("textbox", { name: "Password" }).fill(WRONG_PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page.getByRole("alert")).toContainText(
-      "Incorrect email or password."
-    );
+    await expect(pageAlert(page)).toContainText("Incorrect email or password.");
   }
 
   // The 6th attempt uses the correct password, but the identity is now
@@ -28,9 +27,7 @@ test("repeated password failures temporarily restrict sign-in, even with the cor
   await page.getByLabel("Email").fill(user.email);
   await page.getByRole("textbox", { name: "Password" }).fill(user.password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("alert")).toContainText(
-    "Incorrect email or password."
-  );
+  await expect(pageAlert(page)).toContainText("Incorrect email or password.");
   await expect(page).toHaveURL(/sign-in/);
 });
 
@@ -55,7 +52,7 @@ test("requesting a second magic link for the same address too soon is rejected a
   // immediate second request for the same address must be turned away.
   await page.getByLabel("Email").fill(email);
   await page.getByRole("button", { name: "Send sign-in link" }).click();
-  await expect(page.getByRole("alert")).toContainText(
+  await expect(pageAlert(page)).toContainText(
     "We couldn't send that email. Please try again."
   );
 });

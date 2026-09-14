@@ -46,9 +46,11 @@ export async function enrollTwoFactorViaUI(
     .fill(await currentTotpCode(secret));
   await confirmButton.click();
 
+  // Confirmation awaits a security-notice email send before returning, so
+  // give it more room than the default 5s under CI load.
   await expect(
     section.getByText("Two-factor authentication is enabled on your account.")
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 15_000 });
 
   return { secret, backupCodes };
 }

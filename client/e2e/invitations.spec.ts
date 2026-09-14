@@ -8,7 +8,6 @@ import {
 import { waitForMailpitLink } from "./support/mailpit";
 import {
   cleanupSeededInvitation,
-  createTestPrismaClient,
   seedWorkspaceInvitation,
   type SeededInvitation,
 } from "./support/workspace-invitations";
@@ -18,12 +17,11 @@ test("a new User signs up from an invitation link and lands in the invited Works
 }) => {
   test.setTimeout(60_000);
 
-  const prisma = await createTestPrismaClient();
   const user = uniqueTestUser("invitee-new");
   let seed: SeededInvitation | undefined;
 
   try {
-    seed = await seedWorkspaceInvitation(prisma, user.email, "VIEWER");
+    seed = await seedWorkspaceInvitation(user.email, "VIEWER");
 
     await page.goto(`/accept-invitation?token=${seed.token}`);
     await expect(
@@ -65,8 +63,7 @@ test("a new User signs up from an invitation link and lands in the invited Works
       page.getByRole("heading", { name: seed.workspaceName })
     ).toBeVisible();
   } finally {
-    if (seed) await cleanupSeededInvitation(prisma, seed, [user.email]);
-    await prisma.$disconnect();
+    if (seed) await cleanupSeededInvitation(seed, [user.email]);
   }
 });
 
@@ -76,13 +73,12 @@ test("an existing signed-out User accepting an invitation is routed through sign
 }) => {
   test.setTimeout(60_000);
 
-  const prisma = await createTestPrismaClient();
   const user = uniqueTestUser("invitee-existing");
   let seed: SeededInvitation | undefined;
 
   try {
     await signUpAndVerify(page, user);
-    seed = await seedWorkspaceInvitation(prisma, user.email, "MEMBER");
+    seed = await seedWorkspaceInvitation(user.email, "MEMBER");
 
     await context.clearCookies();
     await page.goto(`/accept-invitation?token=${seed.token}`);
@@ -105,7 +101,6 @@ test("an existing signed-out User accepting an invitation is routed through sign
       page.getByRole("heading", { name: seed.workspaceName })
     ).toBeVisible();
   } finally {
-    if (seed) await cleanupSeededInvitation(prisma, seed, [user.email]);
-    await prisma.$disconnect();
+    if (seed) await cleanupSeededInvitation(seed, [user.email]);
   }
 });

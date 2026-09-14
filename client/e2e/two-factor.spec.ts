@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { signUpAndVerify, uniqueTestUser } from "./support/auth-flows";
+import { pageAlert } from "./support/locators";
 import { waitForMailpitLink } from "./support/mailpit";
 import { currentTotpCode, enrollTwoFactorViaUI } from "./support/two-factor";
 
@@ -40,7 +41,7 @@ test("a 2FA-enabled User is challenged at sign-in, and password reset still requ
 
   await page.getByLabel("Authenticator code").fill("000000");
   await page.getByRole("button", { name: "Verify" }).click();
-  await expect(page.getByRole("alert")).toContainText(
+  await expect(pageAlert(page)).toContainText(
     "That code didn't work. Try again."
   );
 
