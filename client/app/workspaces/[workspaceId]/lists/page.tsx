@@ -163,12 +163,15 @@ export default async function ListBrowsingPage({ params, searchParams }: Props) 
                 </button>
               </form>
 
-              <div className="min-w-0 flex-1">
+              <a
+                href={`/workspaces/${workspaceId}/lists/${list.id}`}
+                className="min-w-0 flex-1 hover:underline"
+              >
                 <div className="truncate text-sm font-medium text-white">{list.name}</div>
                 {list.description && (
                   <div className="truncate text-xs text-neutral-500">{list.description}</div>
                 )}
-              </div>
+              </a>
 
               <span className="rounded-full border border-neutral-700 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-neutral-400">
                 {list.status.replaceAll("_", " ")}

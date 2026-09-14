@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 
-import { archiveList, restoreList, setListStatus } from "./list-lifecycle";
+import { archiveList, restoreList, setListStatus, updateListDescription } from "./list-lifecycle";
 
 async function run() {
   if (!process.env.DATABASE_URL) {
@@ -131,6 +131,52 @@ async function run() {
 
       const result = await setListStatus(prisma, { userId: viewerId, listId, status: "ON_HOLD" });
       assert.deepEqual(result, { status: "forbidden" });
+    }
+
+    // A List Lead or Workspace Admin can edit Description (#27).
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const leadId = await createUser();
+      await addWorkspaceMember(workspaceId, leadId, "MEMBER");
+      await addListMember(listId, leadId, "LEAD");
+
+      const result = await updateListDescription(prisma, {
+        userId: leadId,
+        listId,
+        description: "  What this List is for.  ",
+      });
+      assert.deepEqual(result, { status: "updated" });
+      const list = await prisma.list.findUniqueOrThrow({ where: { id: listId } });
+      assert.equal(list.description, "What this List is for.");
+    }
+
+    // A List Member/Viewer cannot edit Description.
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const memberId = await createUser();
+      await addWorkspaceMember(workspaceId, memberId, "MEMBER");
+      await addListMember(listId, memberId, "MEMBER");
+
+      const result = await updateListDescription(prisma, {
+        userId: memberId,
+        listId,
+        description: "Should not be saved.",
+      });
+      assert.deepEqual(result, { status: "forbidden" });
+      const list = await prisma.list.findUniqueOrThrow({ where: { id: listId } });
+      assert.equal(list.description, null);
+    }
+
+    // An empty Description is stored as null, not an empty string.
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const leadId = await createUser();
+      await addWorkspaceMember(workspaceId, leadId, "MEMBER");
+      await addListMember(listId, leadId, "LEAD");
+
+      await updateListDescription(prisma, { userId: leadId, listId, description: "   " });
+      const list = await prisma.list.findUniqueOrThrow({ where: { id: listId } });
+      assert.equal(list.description, null);
     }
   } finally {
     const listIds = (

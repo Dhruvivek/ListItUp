@@ -1,0 +1,185 @@
+import { notFound } from "next/navigation";
+
+import { prisma } from "@/lib/prisma";
+import { requireAuthenticatedSession } from "@/lib/session/require-authenticated-session";
+
+import { updateListDescriptionAction } from "./actions";
+import { loadListPageData, type ListPageData } from "./page-data";
+
+type Props = {
+  params: Promise<{ workspaceId: string; listId: string }>;
+  searchParams: Promise<{ tab?: string }>;
+};
+
+type TabKey =
+  | "overview"
+  | "list"
+  | "board"
+  | "calendar"
+  | "files"
+  | "timeline"
+  | "dashboard"
+  | "messages";
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "overview", label: "Overview" },
+  { key: "list", label: "List" },
+  { key: "board", label: "Board" },
+  { key: "calendar", label: "Calendar" },
+  { key: "files", label: "Files" },
+  { key: "timeline", label: "Timeline" },
+  { key: "dashboard", label: "Dashboard" },
+  { key: "messages", label: "Messages" },
+];
+
+const TAB_KEYS: readonly string[] = TABS.map((tab) => tab.key);
+
+function isTabKey(value: string): value is TabKey {
+  return TAB_KEYS.includes(value);
+}
+
+// #29, #31, #32, #36, #33 respectively — these views ship in their own
+// tickets. Dashboard and Messages are this spec's deliberately reserved
+// placeholders (Reports & Analytics, and the v2 Chat/VC work).
+const TAB_NOTES: Record<Exclude<TabKey, "overview">, string> = {
+  list: "List view ships in its own ticket (#29).",
+  board: "Board view ships in its own ticket (#31).",
+  calendar: "Calendar view ships in its own ticket (#32).",
+  files: "Files view ships in its own ticket (#36).",
+  timeline: "Timeline view ships in its own ticket (#33).",
+  dashboard: "Reserved — Dashboard content ships with the Reports & Analytics spec.",
+  messages: "Reserved — Messages ships with the v2 Chat/VC system.",
+};
+
+function tabHref(workspaceId: string, listId: string, tab: TabKey): string {
+  return tab === "overview"
+    ? `/workspaces/${workspaceId}/lists/${listId}`
+    : `/workspaces/${workspaceId}/lists/${listId}?tab=${tab}`;
+}
+
+function RolesColumn({ title, entries }: { title: string; entries: { userId: string; name: string }[] }) {
+  return (
+    <div>
+      <div className="font-mono text-[11px] uppercase tracking-wider text-neutral-500">{title}</div>
+      {entries.length === 0 ? (
+        <div className="mt-2 text-sm text-neutral-600">No one yet.</div>
+      ) : (
+        <ul className="mt-2 flex flex-col gap-1.5">
+          {entries.map((entry) => (
+            <li key={entry.userId} className="text-sm text-neutral-300">
+              {entry.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function OverviewTab({
+  data,
+  boundUpdateDescription,
+}: {
+  data: ListPageData;
+  boundUpdateDescription: (formData: FormData) => Promise<void>;
+}) {
+  return (
+    <div className="mt-6 flex flex-col gap-8">
+      <div>
+        <div className="font-mono text-[11px] uppercase tracking-wider text-neutral-500">
+          Description
+        </div>
+        {data.canEditDescription ? (
+          <form action={boundUpdateDescription} className="mt-2 flex flex-col gap-2">
+            <textarea
+              name="description"
+              defaultValue={data.description ?? ""}
+              placeholder="What is this List for?"
+              rows={3}
+              className="w-full rounded-md border border-neutral-700 bg-[#141414] px-3 py-2 text-sm text-neutral-200 placeholder:text-neutral-600 focus:border-[#ff6b4a] focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="self-start rounded-md bg-[#ff6b4a] px-4 py-1.5 text-sm font-medium text-[#1a0800] hover:bg-[#ff8a70]"
+            >
+              Save
+            </button>
+          </form>
+        ) : (
+          <p className="mt-2 text-sm text-neutral-400">
+            {data.description || "No description yet."}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <div className="mb-3 font-mono text-[11px] uppercase tracking-wider text-neutral-500">
+          Roles
+        </div>
+        <div className="grid grid-cols-4 gap-6 rounded-lg border border-neutral-800 bg-[#0d0d0d] p-4">
+          <RolesColumn title="Lead" entries={data.roles.leads} />
+          <RolesColumn title="Member" entries={data.roles.members} />
+          <RolesColumn title="Viewer" entries={data.roles.viewers} />
+          <RolesColumn title="Guest" entries={data.roles.guests} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default async function ListPage({ params, searchParams }: Props) {
+  const { workspaceId, listId } = await params;
+  const query = await searchParams;
+  const session = await requireAuthenticatedSession(`/workspaces/${workspaceId}/lists/${listId}`);
+
+  const data = await loadListPageData(prisma, { userId: session.user.id, workspaceId, listId });
+
+  if (!data) {
+    notFound();
+  }
+
+  const activeTab: TabKey = query.tab && isTabKey(query.tab) ? query.tab : "overview";
+  const boundUpdateDescription = updateListDescriptionAction.bind(null, workspaceId, listId);
+
+  return (
+    <main className="min-h-screen bg-[#080808] px-6 py-12 text-neutral-300">
+      <div className="mx-auto max-w-4xl">
+        <div className="mb-8 flex items-center gap-4">
+          <span className="h-px w-14 bg-[#ff6b4a]" />
+          <a
+            href={`/workspaces/${workspaceId}/lists`}
+            className="font-mono text-xs uppercase tracking-[0.24em] text-[#ff6b4a] hover:text-[#ff8a70]"
+          >
+            {"// Back to Lists"}
+          </a>
+        </div>
+
+        <h1 className="text-3xl font-light text-white">{data.name}</h1>
+
+        <nav className="mt-6 flex flex-wrap items-center gap-6 border-b border-neutral-800 text-sm">
+          {TABS.map((tab) => (
+            <a
+              key={tab.key}
+              href={tabHref(workspaceId, listId, tab.key)}
+              className={
+                activeTab === tab.key
+                  ? "border-b-2 border-[#ff6b4a] pb-3 text-white"
+                  : "pb-3 text-neutral-500 hover:text-neutral-300"
+              }
+            >
+              {tab.label}
+            </a>
+          ))}
+        </nav>
+
+        {activeTab === "overview" ? (
+          <OverviewTab data={data} boundUpdateDescription={boundUpdateDescription} />
+        ) : (
+          <div className="mt-10 rounded-lg border border-dashed border-neutral-800 px-4 py-16 text-center text-sm text-neutral-600">
+            {TAB_NOTES[activeTab]}
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}

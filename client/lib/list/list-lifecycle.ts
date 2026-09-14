@@ -23,7 +23,13 @@ export type SetListStatusResult =
   | { status: "forbidden" }
   | { status: "invalid-status" };
 
-// A List Lead or Workspace Admin/Owner can Archive/Restore/set Status (#26).
+export type UpdateListDescriptionResult =
+  | { status: "updated" }
+  | { status: "list-not-found" }
+  | { status: "forbidden" };
+
+// A List Lead or Workspace Admin/Owner can Archive/Restore/set Status/edit
+// Description (#26, #27).
 const REQUIRED_ACCESS_LEVEL = "LEAD";
 
 export async function archiveList(
@@ -84,5 +90,30 @@ export async function setListStatus(
   }
 
   await database.list.update({ where: { id: input.listId }, data: { status: input.status } });
+  return { status: "updated" };
+}
+
+export async function updateListDescription(
+  database: PrismaClient,
+  input: { userId: string; listId: string; description: string }
+): Promise<UpdateListDescriptionResult> {
+  const list = await database.list.findUnique({ where: { id: input.listId } });
+  if (!list) {
+    return { status: "list-not-found" };
+  }
+
+  const access = await resolveListAccess(database, {
+    userId: input.userId,
+    listId: input.listId,
+  });
+  if (!meetsListAccessLevel(access, REQUIRED_ACCESS_LEVEL)) {
+    return { status: "forbidden" };
+  }
+
+  const description = input.description.trim();
+  await database.list.update({
+    where: { id: input.listId },
+    data: { description: description || null },
+  });
   return { status: "updated" };
 }
