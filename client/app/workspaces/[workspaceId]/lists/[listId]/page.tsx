@@ -5,12 +5,19 @@ import { requireAuthenticatedSession } from "@/lib/session/require-authenticated
 
 import {
   addListMemberAction,
+  addSectionAction,
+  duplicateSectionAction,
+  deleteSectionAction,
   grantGuestAccessAction,
+  moveSectionAction,
   removeListMemberAction,
+  renameSectionAction,
   revokeGuestAccessAction,
+  setListGroupByAction,
   updateListDescriptionAction,
 } from "./actions";
 import { loadListPageData, type ListPageData } from "./page-data";
+import { SectionList } from "./SectionList";
 
 type Props = {
   params: Promise<{ workspaceId: string; listId: string }>;
@@ -47,8 +54,7 @@ function isTabKey(value: string): value is TabKey {
 // #29, #31, #32, #36, #33 respectively — these views ship in their own
 // tickets. Dashboard and Messages are this spec's deliberately reserved
 // placeholders (Reports & Analytics, and the v2 Chat/VC work).
-const TAB_NOTES: Record<Exclude<TabKey, "overview">, string> = {
-  list: "List view ships in its own ticket (#29).",
+const TAB_NOTES: Record<Exclude<TabKey, "overview" | "list">, string> = {
   board: "Board view ships in its own ticket (#31).",
   calendar: "Calendar view ships in its own ticket (#32).",
   files: "Files view ships in its own ticket (#36).",
@@ -236,6 +242,13 @@ export default async function ListPage({ params, searchParams }: Props) {
   const boundRemoveMember = (userId: string) => removeListMemberAction.bind(null, workspaceId, listId, userId);
   const boundGrantGuest = grantGuestAccessAction.bind(null, workspaceId, listId);
   const boundRevokeGuest = (userId: string) => revokeGuestAccessAction.bind(null, workspaceId, listId, userId);
+  const boundAddSection = addSectionAction.bind(null, workspaceId, listId);
+  const boundRenameSection = (sectionId: string) => renameSectionAction.bind(null, workspaceId, listId, sectionId);
+  const boundDuplicateSection = (sectionId: string) => duplicateSectionAction.bind(null, workspaceId, listId, sectionId);
+  const boundDeleteSection = (sectionId: string) => deleteSectionAction.bind(null, workspaceId, listId, sectionId);
+  const boundMoveSection = (sectionId: string, direction: "up" | "down") =>
+    moveSectionAction.bind(null, workspaceId, listId, sectionId, direction);
+  const boundSetGroupBy = setListGroupByAction.bind(null, workspaceId, listId);
 
   return (
     <main className="min-h-screen bg-[#080808] px-6 py-12 text-neutral-300">
@@ -276,6 +289,18 @@ export default async function ListPage({ params, searchParams }: Props) {
             boundRemoveMember={boundRemoveMember}
             boundGrantGuest={boundGrantGuest}
             boundRevokeGuest={boundRevokeGuest}
+          />
+        ) : activeTab === "list" ? (
+          <SectionList
+            sections={data.sections}
+            canManage={data.canManageSections}
+            groupBy={data.groupBy}
+            boundAddSection={boundAddSection}
+            boundRenameSection={boundRenameSection}
+            boundDuplicateSection={boundDuplicateSection}
+            boundDeleteSection={boundDeleteSection}
+            boundMoveSection={boundMoveSection}
+            boundSetGroupBy={boundSetGroupBy}
           />
         ) : (
           <div className="mt-10 rounded-lg border border-dashed border-neutral-800 px-4 py-16 text-center text-sm text-neutral-600">

@@ -61,6 +61,50 @@ async function run() {
       assert.equal(data!.canEditDescription, true);
       assert.deepEqual(data!.roles.leads.map((r) => r.userId), [leadId]);
       assert.deepEqual(data!.eligibleMembers, [], "the Lead is already a List Member");
+      assert.equal(data!.canManageSections, true);
+      assert.equal(data!.groupBy, "SECTION");
+    }
+
+    // Sections render in order, and a List Member (not just Lead) can
+    // manage them (#29).
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const memberId = await createUser();
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: memberId, role: "MEMBER" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: memberId, role: "MEMBER" },
+      });
+      await prisma.section.create({ data: { id: randomUUID(), listId, name: "Done", order: 1 } });
+      await prisma.section.create({ data: { id: randomUUID(), listId, name: "To Do", order: 0 } });
+
+      const data = await loadListPageData(prisma, { userId: memberId, workspaceId, listId });
+
+      assert.ok(data);
+      assert.equal(data!.canManageSections, true);
+      assert.deepEqual(
+        data!.sections.map((s) => s.name),
+        ["To Do", "Done"],
+        "Sections render in their persisted order"
+      );
+    }
+
+    // A List Viewer sees Sections but cannot manage them.
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const viewerId = await createUser();
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: viewerId, role: "MEMBER" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: viewerId, role: "VIEWER" },
+      });
+
+      const data = await loadListPageData(prisma, { userId: viewerId, workspaceId, listId });
+
+      assert.ok(data);
+      assert.equal(data!.canManageSections, false);
     }
 
     // eligibleMembers lists Workspace Members who hold no List-level role

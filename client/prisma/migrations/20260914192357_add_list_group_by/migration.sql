@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "list" ADD COLUMN     "groupBy" TEXT NOT NULL DEFAULT 'SECTION';

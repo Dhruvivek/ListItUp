@@ -167,6 +167,11 @@ model List {
   // Soft-delete: archiving never removes data, so restore is always safe
   // (#26). Null means active.
   archivedAt  DateTime?
+  // The List view's "Add Rule" grouping-config control (#29) — a validated
+  // string (see lib/list/list-sections.ts's isValidGroupBy) rather than a
+  // native enum, since the full set of groupable fields depends on Item's
+  // not-yet-built schema (#30); only "SECTION" is legal today.
+  groupBy     String       @default("SECTION")
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

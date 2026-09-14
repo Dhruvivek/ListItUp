@@ -7,6 +7,7 @@ import {
 } from "@/lib/permissions/list-access";
 
 export type EligibleWorkspaceMember = { userId: string; name: string };
+export type SectionSummary = { id: string; name: string; order: number };
 
 export type ListPageData = {
   listId: string;
@@ -25,6 +26,12 @@ export type ListPageData = {
   // grants aren't drawn from this list since a Guest need not be a
   // Workspace Member at all.
   eligibleMembers: EligibleWorkspaceMember[];
+  // >=WRITE governs Section management and the "Add Rule" grouping control
+  // (#29) — a List Member manages Sections, unlike Description/Roles which
+  // are Lead-only.
+  canManageSections: boolean;
+  sections: SectionSummary[];
+  groupBy: string;
 };
 
 // Kept separate from the page component (same rationale as the
@@ -47,13 +54,14 @@ export async function loadListPageData(
     return null;
   }
 
-  const [roles, workspaceMembers] = await Promise.all([
+  const [roles, workspaceMembers, sections] = await Promise.all([
     getListRoles(database, { listId }),
     database.workspaceMember.findMany({
       where: { workspaceId },
       include: { user: { select: { id: true, name: true } } },
       orderBy: { createdAt: "asc" },
     }),
+    database.section.findMany({ where: { listId }, orderBy: { order: "asc" } }),
   ]);
 
   const existingListRoleUserIds = new Set(
@@ -74,5 +82,12 @@ export async function loadListPageData(
     canEditDescription: meetsListAccessLevel(access, "LEAD"),
     roles,
     eligibleMembers,
+    canManageSections: meetsListAccessLevel(access, "WRITE"),
+    sections: sections.map((section) => ({
+      id: section.id,
+      name: section.name,
+      order: section.order,
+    })),
+    groupBy: list.groupBy,
   };
 }
