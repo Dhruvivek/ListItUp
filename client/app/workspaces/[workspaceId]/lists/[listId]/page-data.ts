@@ -1,4 +1,4 @@
-import type { ListStatus, PrismaClient } from "@/generated/prisma/client";
+import type { ItemPriority, ItemState, ListStatus, PrismaClient } from "@/generated/prisma/client";
 import { getListRoles, type ListRoles } from "@/lib/list/list-roles";
 import {
   meetsListAccessLevel,
@@ -7,7 +7,23 @@ import {
 } from "@/lib/permissions/list-access";
 
 export type EligibleWorkspaceMember = { userId: string; name: string };
-export type SectionSummary = { id: string; name: string; order: number };
+
+export type ItemSummary = {
+  id: string;
+  title: string;
+  state: ItemState;
+  priority: ItemPriority;
+  dueDate: Date | null;
+  hasParent: boolean;
+  assignees: { userId: string; name: string }[];
+};
+
+export type SectionWithItems = {
+  id: string;
+  name: string;
+  order: number;
+  items: ItemSummary[];
+};
 
 export type ListPageData = {
   listId: string;
@@ -26,11 +42,14 @@ export type ListPageData = {
   // grants aren't drawn from this list since a Guest need not be a
   // Workspace Member at all.
   eligibleMembers: EligibleWorkspaceMember[];
-  // >=WRITE governs Section management and the "Add Rule" grouping control
-  // (#29) — a List Member manages Sections, unlike Description/Roles which
-  // are Lead-only.
+  // >=WRITE governs Section management, the "Add Rule" grouping control,
+  // and Item creation (#29, #30) — a List Member manages these, unlike
+  // Description/Roles which are Lead-only.
   canManageSections: boolean;
-  sections: SectionSummary[];
+  sections: SectionWithItems[];
+  // Items with no Section, grouped separately since the List view still
+  // has to show them somewhere.
+  unsectionedItems: ItemSummary[];
   groupBy: string;
 };
 
@@ -54,7 +73,7 @@ export async function loadListPageData(
     return null;
   }
 
-  const [roles, workspaceMembers, sections] = await Promise.all([
+  const [roles, workspaceMembers, sections, items] = await Promise.all([
     getListRoles(database, { listId }),
     database.workspaceMember.findMany({
       where: { workspaceId },
@@ -62,6 +81,13 @@ export async function loadListPageData(
       orderBy: { createdAt: "asc" },
     }),
     database.section.findMany({ where: { listId }, orderBy: { order: "asc" } }),
+    // Archived Items are browsable via their own filter/toggle inside the
+    // List view (#38), not shown here by default.
+    database.item.findMany({
+      where: { listId, state: { not: "ARCHIVED" } },
+      include: { assignees: { include: { user: { select: { id: true, name: true } } } } },
+      orderBy: { createdAt: "asc" },
+    }),
   ]);
 
   const existingListRoleUserIds = new Set(
@@ -70,6 +96,31 @@ export async function loadListPageData(
   const eligibleMembers = workspaceMembers
     .filter((member) => !existingListRoleUserIds.has(member.userId))
     .map((member) => ({ userId: member.userId, name: member.user.name }));
+
+  const toItemSummary = (item: (typeof items)[number]): ItemSummary => ({
+    id: item.id,
+    title: item.title,
+    state: item.state,
+    priority: item.priority,
+    dueDate: item.dueDate,
+    hasParent: item.parentId !== null,
+    assignees: item.assignees.map((assignee) => ({
+      userId: assignee.userId,
+      name: assignee.user.name,
+    })),
+  });
+
+  const itemsBySectionId = new Map<string, ItemSummary[]>();
+  const unsectionedItems: ItemSummary[] = [];
+  for (const item of items) {
+    if (!item.sectionId) {
+      unsectionedItems.push(toItemSummary(item));
+      continue;
+    }
+    const bucket = itemsBySectionId.get(item.sectionId) ?? [];
+    bucket.push(toItemSummary(item));
+    itemsBySectionId.set(item.sectionId, bucket);
+  }
 
   return {
     listId: list.id,
@@ -87,7 +138,9 @@ export async function loadListPageData(
       id: section.id,
       name: section.name,
       order: section.order,
+      items: itemsBySectionId.get(section.id) ?? [],
     })),
+    unsectionedItems,
     groupBy: list.groupBy,
   };
 }

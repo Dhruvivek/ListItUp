@@ -107,6 +107,52 @@ async function run() {
       assert.equal(data!.canManageSections, false);
     }
 
+    // Items render grouped into their Section, and unsectioned Items land
+    // in a separate bucket (#30).
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const memberId = await createUser();
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: memberId, role: "MEMBER" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: memberId, role: "MEMBER" },
+      });
+      const sectionId = randomUUID();
+      await prisma.section.create({ data: { id: sectionId, listId, name: "To Do", order: 0 } });
+      await prisma.item.create({
+        data: { id: randomUUID(), listId, sectionId, title: "In a Section", creatorId: memberId },
+      });
+      await prisma.item.create({
+        data: { id: randomUUID(), listId, title: "No Section", creatorId: memberId },
+      });
+      await prisma.item.create({
+        data: {
+          id: randomUUID(),
+          listId,
+          sectionId,
+          title: "Archived",
+          creatorId: memberId,
+          state: "ARCHIVED",
+        },
+      });
+
+      const data = await loadListPageData(prisma, { userId: memberId, workspaceId, listId });
+
+      assert.ok(data);
+      const section = data!.sections.find((s) => s.id === sectionId);
+      assert.ok(section);
+      assert.deepEqual(
+        section!.items.map((item) => item.title),
+        ["In a Section"],
+        "Archived Items are excluded from the default List view (#38 owns the Archived toggle)"
+      );
+      assert.deepEqual(
+        data!.unsectionedItems.map((item) => item.title),
+        ["No Section"]
+      );
+    }
+
     // eligibleMembers lists Workspace Members who hold no List-level role
     // yet (the add-Member/Viewer candidate pool for #28), excluding anyone
     // who already does.

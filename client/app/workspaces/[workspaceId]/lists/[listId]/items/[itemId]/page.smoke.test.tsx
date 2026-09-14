@@ -1,0 +1,186 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+
+import { loadItemDetailData } from "./page-data";
+
+async function run() {
+  if (!process.env.DATABASE_URL) {
+    console.log("Item detail page smoke test skipped: DATABASE_URL is not set");
+    return;
+  }
+
+  const [{ PrismaPg }, { PrismaClient }] = await Promise.all([
+    import("@prisma/adapter-pg"),
+    import("@/generated/prisma/client"),
+  ]);
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  });
+
+  const createdUserIds: string[] = [];
+  const createdWorkspaceIds: string[] = [];
+
+  async function createUser(name = "Test User"): Promise<string> {
+    const userId = randomUUID();
+    createdUserIds.push(userId);
+    await prisma.user.create({ data: { id: userId, name, email: `item-detail-${userId}@example.test` } });
+    return userId;
+  }
+
+  async function createWorkspaceWithList(): Promise<{ workspaceId: string; listId: string }> {
+    const workspaceId = randomUUID();
+    const listId = randomUUID();
+    createdWorkspaceIds.push(workspaceId);
+    await prisma.workspace.create({ data: { id: workspaceId, name: "Test Workspace" } });
+    await prisma.list.create({ data: { id: listId, workspaceId, name: "Platform Retrofit" } });
+    return { workspaceId, listId };
+  }
+
+  try {
+    // A List Member sees the full detail surface — title, Section,
+    // Assignees, Priority, due date, state, Blocker reason, Creator — and
+    // can edit.
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const memberId = await createUser("Maya Torres");
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: memberId, role: "MEMBER" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: memberId, role: "MEMBER" },
+      });
+      const sectionId = randomUUID();
+      await prisma.section.create({ data: { id: sectionId, listId, name: "In Progress", order: 0 } });
+      const assigneeId = await createUser("Riya Kapoor");
+
+      const item = await prisma.item.create({
+        data: {
+          id: randomUUID(),
+          listId,
+          sectionId,
+          title: "Review load tables",
+          creatorId: memberId,
+          priority: "HIGH",
+          state: "BLOCKED",
+          blockerReason: "Waiting on vendor",
+          assignees: { create: [{ id: randomUUID(), userId: assigneeId }] },
+        },
+      });
+
+      const data = await loadItemDetailData(prisma, {
+        userId: memberId,
+        workspaceId,
+        listId,
+        itemId: item.id,
+      });
+
+      assert.ok(data, "expected detail data for a List Member");
+      assert.equal(data!.title, "Review load tables");
+      assert.equal(data!.priority, "HIGH");
+      assert.equal(data!.state, "BLOCKED");
+      assert.equal(data!.blockerReason, "Waiting on vendor");
+      assert.equal(data!.sectionId, sectionId);
+      assert.equal(data!.creatorName, "Maya Torres");
+      assert.deepEqual(data!.assignees.map((a) => a.name), ["Riya Kapoor"]);
+      assert.equal(data!.canEdit, true);
+      assert.deepEqual(data!.assignableMembers.map((m) => m.userId), [memberId]);
+    }
+
+    // A List Viewer can see the Item but cannot edit it.
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const viewerId = await createUser();
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: viewerId, role: "MEMBER" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: viewerId, role: "VIEWER" },
+      });
+      const creatorId = await createUser();
+      const item = await prisma.item.create({
+        data: { id: randomUUID(), listId, title: "Read-only for Viewer", creatorId },
+      });
+
+      const data = await loadItemDetailData(prisma, { userId: viewerId, workspaceId, listId, itemId: item.id });
+
+      assert.ok(data);
+      assert.equal(data!.canEdit, false);
+    }
+
+    // A User with no access to the List gets no data at all.
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const creatorId = await createUser();
+      const item = await prisma.item.create({
+        data: { id: randomUUID(), listId, title: "Private", creatorId },
+      });
+      const strangerId = await createUser();
+
+      const data = await loadItemDetailData(prisma, {
+        userId: strangerId,
+        workspaceId,
+        listId,
+        itemId: item.id,
+      });
+      assert.equal(data, null);
+    }
+
+    // Parent/children relationships surface correctly.
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const memberId = await createUser();
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: memberId, role: "MEMBER" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: memberId, role: "MEMBER" },
+      });
+      const parent = await prisma.item.create({
+        data: { id: randomUUID(), listId, title: "Parent", creatorId: memberId },
+      });
+      const child = await prisma.item.create({
+        data: { id: randomUUID(), listId, title: "Child", creatorId: memberId, parentId: parent.id },
+      });
+
+      const parentData = await loadItemDetailData(prisma, {
+        userId: memberId,
+        workspaceId,
+        listId,
+        itemId: parent.id,
+      });
+      assert.ok(parentData);
+      assert.deepEqual(parentData!.children.map((c) => c.title), ["Child"]);
+
+      const childData = await loadItemDetailData(prisma, {
+        userId: memberId,
+        workspaceId,
+        listId,
+        itemId: child.id,
+      });
+      assert.ok(childData);
+      assert.equal(childData!.parent?.title, "Parent");
+    }
+  } finally {
+    const listIds = (
+      await prisma.list.findMany({ where: { workspaceId: { in: createdWorkspaceIds } } })
+    ).map((list) => list.id);
+    await prisma.itemAssignee.deleteMany({ where: { item: { listId: { in: listIds } } } });
+    await prisma.item.deleteMany({ where: { listId: { in: listIds } } });
+    await prisma.section.deleteMany({ where: { listId: { in: listIds } } });
+    await prisma.listMember.deleteMany({ where: { listId: { in: listIds } } });
+    await prisma.list.deleteMany({ where: { id: { in: listIds } } });
+    await prisma.workspaceMember.deleteMany({
+      where: { workspaceId: { in: createdWorkspaceIds } },
+    });
+    await prisma.workspace.deleteMany({ where: { id: { in: createdWorkspaceIds } } });
+    await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+    await prisma.$disconnect();
+  }
+
+  console.log("Item detail page smoke test passed");
+}
+
+void run().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});

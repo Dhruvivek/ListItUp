@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuthenticatedSession } from "@/lib/session/require-authenticated-session";
 
 import {
+  addItemAction,
   addListMemberAction,
   addSectionAction,
   duplicateSectionAction,
@@ -249,6 +250,7 @@ export default async function ListPage({ params, searchParams }: Props) {
   const boundMoveSection = (sectionId: string, direction: "up" | "down") =>
     moveSectionAction.bind(null, workspaceId, listId, sectionId, direction);
   const boundSetGroupBy = setListGroupByAction.bind(null, workspaceId, listId);
+  const boundAddItem = (sectionId: string | null) => addItemAction.bind(null, workspaceId, listId, sectionId);
 
   return (
     <main className="min-h-screen bg-[#080808] px-6 py-12 text-neutral-300">
@@ -293,14 +295,18 @@ export default async function ListPage({ params, searchParams }: Props) {
         ) : activeTab === "list" ? (
           <SectionList
             sections={data.sections}
+            unsectionedItems={data.unsectionedItems}
             canManage={data.canManageSections}
             groupBy={data.groupBy}
+            workspaceId={workspaceId}
+            listId={listId}
             boundAddSection={boundAddSection}
             boundRenameSection={boundRenameSection}
             boundDuplicateSection={boundDuplicateSection}
             boundDeleteSection={boundDeleteSection}
             boundMoveSection={boundMoveSection}
             boundSetGroupBy={boundSetGroupBy}
+            boundAddItem={boundAddItem}
           />
         ) : (
           <div className="mt-10 rounded-lg border border-dashed border-neutral-800 px-4 py-16 text-center text-sm text-neutral-600">

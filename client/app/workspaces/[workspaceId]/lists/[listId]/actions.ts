@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import type { ListMemberRole } from "@/generated/prisma/client";
+import { createItem } from "@/lib/item/item-creation";
 import { grantGuestAccess, revokeGuestAccess } from "@/lib/list/list-guests";
 import { updateListDescription } from "@/lib/list/list-lifecycle";
 import { addListMember, removeListMember } from "@/lib/list/list-membership";
@@ -183,5 +184,27 @@ export async function setListGroupByAction(
   const groupBy = String(formData.get("groupBy") ?? "");
 
   await setListGroupBy(prisma, { actorUserId: session.user.id, listId, groupBy });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+export async function addItemAction(
+  workspaceId: string,
+  listId: string,
+  sectionId: string | null,
+  formData: FormData
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+  const title = String(formData.get("title") ?? "").trim();
+
+  if (!title) {
+    return;
+  }
+
+  await createItem(prisma, {
+    actorUserId: session.user.id,
+    listId,
+    title,
+    sectionId: sectionId ?? undefined,
+  });
   revalidatePath(listPath(workspaceId, listId));
 }

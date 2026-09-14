@@ -1,0 +1,65 @@
+import { randomUUID } from "node:crypto";
+
+import type { PrismaClient } from "@/generated/prisma/client";
+import { resolveItemAccess } from "@/lib/permissions/item-access";
+import { meetsListAccessLevel } from "@/lib/permissions/list-access";
+
+export type AddAssigneeResult =
+  | { status: "added" }
+  | { status: "item-not-found" }
+  | { status: "forbidden" };
+
+export type RemoveAssigneeResult =
+  | { status: "removed" }
+  | { status: "item-not-found" }
+  | { status: "forbidden" };
+
+// A List Member, Lead, or Workspace Admin/Owner can change an Item's
+// Assignees; a List Viewer or Guest cannot (#30). This never touches
+// creatorId — Creator attribution stays fixed as Assignees change.
+const REQUIRED_ACCESS_LEVEL = "WRITE";
+
+export async function addAssignee(
+  database: PrismaClient,
+  input: { actorUserId: string; itemId: string; userId: string }
+): Promise<AddAssigneeResult> {
+  const { actorUserId, itemId, userId } = input;
+
+  const item = await database.item.findUnique({ where: { id: itemId } });
+  if (!item) {
+    return { status: "item-not-found" };
+  }
+
+  const access = await resolveItemAccess(database, { userId: actorUserId, itemId });
+  if (!meetsListAccessLevel(access, REQUIRED_ACCESS_LEVEL)) {
+    return { status: "forbidden" };
+  }
+
+  await database.itemAssignee.upsert({
+    where: { itemId_userId: { itemId, userId } },
+    create: { id: randomUUID(), itemId, userId },
+    update: {},
+  });
+
+  return { status: "added" };
+}
+
+export async function removeAssignee(
+  database: PrismaClient,
+  input: { actorUserId: string; itemId: string; userId: string }
+): Promise<RemoveAssigneeResult> {
+  const { actorUserId, itemId, userId } = input;
+
+  const item = await database.item.findUnique({ where: { id: itemId } });
+  if (!item) {
+    return { status: "item-not-found" };
+  }
+
+  const access = await resolveItemAccess(database, { userId: actorUserId, itemId });
+  if (!meetsListAccessLevel(access, REQUIRED_ACCESS_LEVEL)) {
+    return { status: "forbidden" };
+  }
+
+  await database.itemAssignee.deleteMany({ where: { itemId, userId } });
+  return { status: "removed" };
+}

@@ -2,33 +2,105 @@
 
 import { useState } from "react";
 
-import type { SectionSummary } from "./page-data";
+import type { ItemSummary, SectionWithItems } from "./page-data";
 
-// Item count per Section is always 0 until lib/item/ ships (#30) — Section
-// management and the List view's grouping mechanics are this ticket's
-// scope, not Item rendering.
-const ITEM_COUNT_PER_SECTION = 0;
+const STATE_COLOR: Record<ItemSummary["state"], string> = {
+  TO_DO: "#737373",
+  IN_PROGRESS: "#5b9dff",
+  BLOCKED: "#f5b642",
+  COMPLETE: "#3ecf8e",
+  ARCHIVED: "#525252",
+};
+
+const PRIORITY_LABEL: Record<ItemSummary["priority"], string> = {
+  LOW: "Low",
+  NORMAL: "Normal",
+  HIGH: "High",
+};
+
+function ItemRow({ item, workspaceId, listId }: { item: ItemSummary; workspaceId: string; listId: string }) {
+  return (
+    <a
+      href={`/workspaces/${workspaceId}/lists/${listId}/items/${item.id}`}
+      className="flex items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-[#141414]"
+    >
+      <span
+        className="h-2 w-2 flex-shrink-0 rounded-full"
+        style={{ backgroundColor: STATE_COLOR[item.state] }}
+      />
+      <span className="flex-1 truncate text-neutral-200">
+        {item.hasParent && <span className="mr-1 text-neutral-600">↳</span>}
+        {item.title}
+      </span>
+      {item.priority !== "NORMAL" && (
+        <span className="font-mono text-[10px] uppercase tracking-wider text-neutral-500">
+          {PRIORITY_LABEL[item.priority]}
+        </span>
+      )}
+      {item.dueDate && (
+        <span className="font-mono text-[10px] text-neutral-500">
+          {new Date(item.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+        </span>
+      )}
+      {item.assignees.length > 0 && (
+        <span className="font-mono text-[10px] text-neutral-500">
+          {item.assignees.map((a) => a.name).join(", ")}
+        </span>
+      )}
+    </a>
+  );
+}
+
+function AddItemForm({
+  boundAddItem,
+}: {
+  boundAddItem: (formData: FormData) => Promise<void>;
+}) {
+  return (
+    <form action={boundAddItem} className="flex items-center gap-2 px-3 py-2">
+      <span className="text-neutral-600">+</span>
+      <input
+        type="text"
+        name="title"
+        placeholder="Add an Item"
+        required
+        className="flex-1 bg-transparent text-sm text-neutral-200 placeholder:text-neutral-600 focus:outline-none"
+      />
+      <button type="submit" className="text-xs text-neutral-500 hover:text-[#ff8a70]">
+        Add
+      </button>
+    </form>
+  );
+}
 
 export function SectionList({
   sections,
+  unsectionedItems,
   canManage,
   groupBy,
+  workspaceId,
+  listId,
   boundAddSection,
   boundRenameSection,
   boundDuplicateSection,
   boundDeleteSection,
   boundMoveSection,
   boundSetGroupBy,
+  boundAddItem,
 }: {
-  sections: SectionSummary[];
+  sections: SectionWithItems[];
+  unsectionedItems: ItemSummary[];
   canManage: boolean;
   groupBy: string;
+  workspaceId: string;
+  listId: string;
   boundAddSection: (formData: FormData) => Promise<void>;
   boundRenameSection: (sectionId: string) => (formData: FormData) => Promise<void>;
   boundDuplicateSection: (sectionId: string) => () => Promise<void>;
   boundDeleteSection: (sectionId: string) => () => Promise<void>;
   boundMoveSection: (sectionId: string, direction: "up" | "down") => () => Promise<void>;
   boundSetGroupBy: (formData: FormData) => Promise<void>;
+  boundAddItem: (sectionId: string | null) => (formData: FormData) => Promise<void>;
 }) {
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const [hideEmpty, setHideEmpty] = useState(false);
@@ -46,9 +118,8 @@ export function SectionList({
     });
   }
 
-  const visibleSections = hideEmpty
-    ? sections.filter(() => ITEM_COUNT_PER_SECTION > 0)
-    : sections;
+  const visibleSections = hideEmpty ? sections.filter((section) => section.items.length > 0) : sections;
+  const showUnsectioned = unsectionedItems.length > 0 || (!hideEmpty && canManage);
 
   return (
     <div className="mt-6">
@@ -105,7 +176,7 @@ export function SectionList({
         </button>
       </div>
 
-      {visibleSections.length === 0 ? (
+      {visibleSections.length === 0 && !showUnsectioned ? (
         <div className="rounded-lg border border-dashed border-neutral-800 px-4 py-16 text-center text-sm text-neutral-600">
           {sections.length === 0
             ? "No Sections yet."
@@ -159,9 +230,7 @@ export function SectionList({
                     <span className="flex-1 text-sm font-semibold text-white">{section.name}</span>
                   )}
 
-                  <span className="font-mono text-xs text-neutral-600">
-                    {ITEM_COUNT_PER_SECTION} items
-                  </span>
+                  <span className="font-mono text-xs text-neutral-600">{section.items.length} items</span>
 
                   {canManage && !isRenaming && (
                     <div className="flex items-center gap-3 text-xs text-neutral-500">
@@ -197,13 +266,32 @@ export function SectionList({
                 </div>
 
                 {!collapsed && (
-                  <div className="border-t border-neutral-800 px-4 py-6 text-center text-xs text-neutral-600">
-                    Items ship in their own ticket (#30).
+                  <div className="border-t border-neutral-800 px-1 py-1">
+                    {section.items.length === 0 ? (
+                      <div className="px-3 py-4 text-center text-xs text-neutral-600">No Items yet.</div>
+                    ) : (
+                      section.items.map((item) => (
+                        <ItemRow key={item.id} item={item} workspaceId={workspaceId} listId={listId} />
+                      ))
+                    )}
+                    {canManage && <AddItemForm boundAddItem={boundAddItem(section.id)} />}
                   </div>
                 )}
               </div>
             );
           })}
+
+          {showUnsectioned && (
+            <div className="rounded-lg border border-neutral-800 bg-[#0d0d0d]">
+              <div className="px-4 py-3 text-sm font-semibold text-white">No Section</div>
+              <div className="border-t border-neutral-800 px-1 py-1">
+                {unsectionedItems.map((item) => (
+                  <ItemRow key={item.id} item={item} workspaceId={workspaceId} listId={listId} />
+                ))}
+                {canManage && <AddItemForm boundAddItem={boundAddItem(null)} />}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

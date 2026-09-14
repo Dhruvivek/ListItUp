@@ -23,6 +23,8 @@ model User {
   listMembers      ListMember[]
   guestAccess      Guest[]
   starredLists     Starred[]
+  createdItems     Item[]           @relation("ItemCreator")
+  itemAssignments  ItemAssignee[]
   platformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentUser")
   grantedPlatformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentGranter")
   revokedPlatformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentRevoker")
@@ -179,6 +181,7 @@ model List {
   guests      Guest[]
   starredBy   Starred[]
   sections    Section[]
+  items       Item[]
 
   @@index([workspaceId])
   @@map("list")
@@ -237,9 +240,71 @@ model Section {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   list      List     @relation(fields: [listId], references: [id], onDelete: Cascade)
+  items     Item[]
 
   @@index([listId])
   @@map("section")
+}
+
+enum ItemState {
+  TO_DO
+  IN_PROGRESS
+  BLOCKED
+  COMPLETE
+  ARCHIVED
+}
+
+enum ItemPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+model Item {
+  id        String       @id
+  listId    String
+  // Self-referencing parent supports arbitrary-depth nesting through one
+  // mechanism — no separate Subtask concept (#23, #30).
+  parentId  String?
+  sectionId String?
+  title     String
+  dueDate   DateTime?
+  state     ItemState    @default(TO_DO)
+  priority  ItemPriority @default(NORMAL)
+  // Required when state is BLOCKED (enforced at the application layer in
+  // lib/item/, not at the schema level).
+  blockerReason String?
+  // Set once at creation; never reassigned as Assignees change — enforced
+  // at the application layer in lib/item/, matching Section/List's
+  // established convention for this kind of invariant.
+  creatorId String
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  list      List           @relation(fields: [listId], references: [id], onDelete: Cascade)
+  section   Section?       @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  parent    Item?          @relation("ItemHierarchy", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children  Item[]         @relation("ItemHierarchy")
+  creator   User           @relation("ItemCreator", fields: [creatorId], references: [id])
+  assignees ItemAssignee[]
+
+  @@index([listId])
+  @@index([sectionId])
+  @@index([parentId])
+  @@map("item")
+}
+
+model ItemAssignee {
+  id        String   @id
+  itemId    String
+  userId    String
+  createdAt DateTime @default(now())
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, userId])
+  @@index([userId])
+  @@map("item_assignee")
 }
 
 // Better Auth's email-verification tokens are stateless signed JWTs and are
