@@ -20,6 +20,10 @@ _Avoid_: Project status, health, phase
 A named grouping of an Item's siblings within a List, used to organize a List's Items (e.g. by stage or theme).
 _Avoid_: Column, stage, bucket
 
+**Channel**:
+A named, ongoing text conversation within a List, organized Discord-style — a List may have multiple Channels, each with its own message history, shown in the List's Messages view. Every List gets one un-deletable default Channel on creation; a List Lead or Workspace Admin can create, rename, delete, or reorder additional ones. Any User with access to the List — including a List Viewer or a Guest — can read, post, and attach files in its Channels, even though they cannot edit that List's Items (see Viewer, Guest). A sender can delete their own message; a List Lead or Workspace Admin can delete anyone's. v2 feature — not built in v1.
+_Avoid_: Thread, chat room, chat (as a noun for the concept itself)
+
 **Item**:
 A single entry inside a List, or a nested child of another Item. An Item may represent a task, idea, product, note, or decision candidate depending on the List's purpose, and may carry accountability details (Assignees, state, due date) when action is required. Item capabilities are consistent in personal and shared Workspaces.
 _Avoid_: Todo, card, row, task, subtask
@@ -55,6 +59,10 @@ _Avoid_: Comment, reply, thread
 **Mention**:
 A `@name` reference to a User inside a Note, notifying that User. Only Users who already have access to the Note's Item (its Assignees, or the List's Members/Leads/Viewers/Guests) can be mentioned.
 _Avoid_: Tag, ping
+
+**Direct Message**:
+A private 1:1 text conversation between two Users who share at least one Workspace, independent of any List. Lives in its own top-level nav surface, separate from Updates and Profile. Reuses the same Attachment infrastructure as Items and Channels for file sharing. v2 feature — not built in v1.
+_Avoid_: Private message, chat, thread
 
 **Personal Note**:
 A private planning note a User attaches to a shared Item they are assigned to. It is visible only to that User and does not change the shared Item or its team-visible Notes.
@@ -113,7 +121,7 @@ A Workspace-level role for a User who belongs to the Workspace but has no access
 _Avoid_: Collaborator, teammate, contributor
 
 **Viewer**:
-A Workspace-level role for a User who is strictly read-only, both in the Workspace and in any List they are explicitly added to. Viewer is a permission ceiling: even if given a higher List-level role, a Viewer's effective permissions never exceed read-only.
+A Workspace-level role for a User who is strictly read-only, both in the Workspace and in any List they are explicitly added to. Viewer is a permission ceiling: even if given a higher List-level role, a Viewer's effective permissions never exceed read-only. This ceiling applies to Items and List content; it does not extend to a List's Channels, where a Viewer can read, post, and attach files like any other role (see Channel, ADR 0013).
 _Avoid_: Guest, observer, read-only user
 
 **List Lead**:
@@ -125,11 +133,11 @@ A List-level role for a User who can create and edit Items within one specific L
 _Avoid_: Collaborator, contributor
 
 **List Viewer**:
-A List-level role for a User who can read one specific List's Items without changing them.
+A List-level role for a User who can read one specific List's Items without changing them. Can nonetheless read, post, and attach files in that List's Channels — the read-only ceiling covers Items, not Channels (see Channel, ADR 0013).
 _Avoid_: Guest, observer
 
 **Guest**:
-An external person granted read-only access to one specific List, without joining the Workspace. A Guest has no Workspace-level identity and no visibility into anything outside the List(s) they were explicitly granted access to. The same person may hold independent Guest access to multiple Lists.
+An external person granted read-only access to one specific List, without joining the Workspace. A Guest has no Workspace-level identity and no visibility into anything outside the List(s) they were explicitly granted access to. The same person may hold independent Guest access to multiple Lists. A Guest can nonetheless read, post, and attach files in that List's Channels — the read-only grant covers Items, not Channels (see Channel, ADR 0013).
 _Avoid_: External collaborator, client, viewer
 
 **Capture**:
@@ -173,12 +181,20 @@ The act of returning an Archived List or Item to active use.
 _Avoid_: Unarchive, recover
 
 **Report**:
-A live summary view of Items across Lists, usually filtered by Assignee, state, date, or Workspace.
-_Avoid_: Export, snapshot, document
+A live summary view of a single List's Items, filtered by Assignee, state, or date. Any Member can name and save a Report's filter setup for reuse (private to them by default; re-opening it always re-runs against current data, never a frozen copy) and export its current results as a CSV file.
+_Avoid_: Snapshot, document (a saved Report re-runs live; it does not freeze data)
 
 **Analytics**:
-Operational health signals derived from Items and Lists, such as completion rate, blocked count, overdue count, aging To Do Items, and Assignee workload.
+Operational health signals derived from Items and Lists, such as completion rate, blocked count, overdue count, aging To Do Items, and Assignee workload, shown via widgets and visualizations (e.g. a completion heatmap, a per-Member contribution map, a progress graph, a state-imbalance radar chart) each tied to one specific accountability question.
 _Avoid_: Productivity score, streak, leaderboard
+
+**Dashboard**:
+The View (alongside List, Board, Calendar, Files) available on My Tasks and on a List, showing widgets built from Report and Analytics data — completion/overdue counts, breakdowns by state/Section/List, and the Analytics visualizations.
+_Avoid_: Report, Analytics (Dashboard is where you look at that data, not the data itself)
+
+**Workload**:
+A later-phase Analytics view, scoped to a single List, showing each Member's open-Item count so a Lead/Admin can spot who's overloaded or underused. Not a Workspace-wide or cross-List view.
+_Avoid_: Portfolio, capacity plan
 
 **Spec**:
 A written plan for a product capability, usually stored under `docs/Specs-Planned/` until shipped.
