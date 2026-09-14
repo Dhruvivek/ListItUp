@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth/auth";
-import { createAttachment, validateAttachmentUpload } from "@/lib/item/item-attachments";
+import { authorizeAttachmentUpload, createAttachment, validateAttachmentUpload } from "@/lib/item/item-attachments";
 import { prisma } from "@/lib/prisma";
 import { buildAttachmentStorageKey, uploadAttachmentObject } from "@/lib/storage/object-storage";
 
@@ -41,6 +41,17 @@ export async function POST(request: Request, { params }: { params: Promise<Route
   const validation = validateAttachmentUpload({ contentType: file.type, sizeBytes: file.size });
   if (validation.status !== "ok") {
     return redirectToItem(request, routeParams, validation.status);
+  }
+
+  // Authorize before touching storage — uploading first would let an
+  // unauthorized caller write bytes into private storage that the
+  // metadata write then simply discards (ADR 0002).
+  const authorization = await authorizeAttachmentUpload(prisma, {
+    actorUserId: session.user.id,
+    itemId: routeParams.itemId,
+  });
+  if (authorization.status !== "ok") {
+    return redirectToItem(request, routeParams, authorization.status);
   }
 
   const storageKey = buildAttachmentStorageKey(routeParams.itemId, file.name);

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { formatAttachmentSize } from "@/lib/item/item-attachments";
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticatedSession } from "@/lib/session/require-authenticated-session";
 
@@ -45,16 +46,6 @@ const ATTACHMENT_ERROR_MESSAGE: Record<string, string> = {
   forbidden: "You don't have permission to attach files to this Item.",
   "item-not-found": "This Item no longer exists.",
 };
-
-function formatFileSize(sizeBytes: number): string {
-  if (sizeBytes < 1024) {
-    return `${sizeBytes} B`;
-  }
-  if (sizeBytes < 1024 * 1024) {
-    return `${(sizeBytes / 1024).toFixed(1)} KB`;
-  }
-  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 export default async function ItemDetailPage({ params, searchParams }: Props) {
   const { workspaceId, listId, itemId } = await params;
@@ -554,7 +545,7 @@ export default async function ItemDetailPage({ params, searchParams }: Props) {
                   {attachment.fileName}
                 </a>
                 <span className="flex-shrink-0 text-xs text-neutral-600">
-                  {formatFileSize(attachment.sizeBytes)} · {attachment.uploaderName}
+                  {formatAttachmentSize(attachment.sizeBytes)} · {attachment.uploaderName}
                 </span>
               </li>
             ))}

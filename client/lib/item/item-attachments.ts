@@ -35,6 +35,18 @@ export const ALLOWED_ATTACHMENT_CONTENT_TYPES: ReadonlySet<string> = new Set([
 
 export const MAX_ATTACHMENT_SIZE_BYTES = 1024 * 1024 * 1024;
 
+// Shared by the Item detail page and Files view so file sizes read the
+// same way in both places. Pure — unit tested directly without a database.
+export function formatAttachmentSize(sizeBytes: number): string {
+  if (sizeBytes < 1024) {
+    return `${sizeBytes} B`;
+  }
+  if (sizeBytes < 1024 * 1024) {
+    return `${(sizeBytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export type ValidateAttachmentUploadResult =
   | { status: "ok" }
   | { status: "type-not-allowed" }
@@ -51,6 +63,34 @@ export function validateAttachmentUpload(input: {
   if (input.sizeBytes > MAX_ATTACHMENT_SIZE_BYTES) {
     return { status: "too-large" };
   }
+  return { status: "ok" };
+}
+
+export type AuthorizeAttachmentUploadResult =
+  | { status: "ok" }
+  | { status: "item-not-found" }
+  | { status: "forbidden" };
+
+// Checked by the Route Handler before it uploads any bytes to storage —
+// uploading first and authorizing second would let an unauthorized caller
+// write objects into private storage that the metadata write then simply
+// discards, leaking storage writes past the Item's access boundary (ADR
+// 0002: "Attachment access must be mediated by Workspace and Item
+// permissions").
+export async function authorizeAttachmentUpload(
+  database: PrismaClient,
+  input: { actorUserId: string; itemId: string }
+): Promise<AuthorizeAttachmentUploadResult> {
+  const item = await database.item.findUnique({ where: { id: input.itemId } });
+  if (!item) {
+    return { status: "item-not-found" };
+  }
+
+  const access = await resolveItemAccess(database, { userId: input.actorUserId, itemId: input.itemId });
+  if (!meetsListAccessLevel(access, REQUIRED_ACCESS_LEVEL)) {
+    return { status: "forbidden" };
+  }
+
   return { status: "ok" };
 }
 
@@ -74,14 +114,9 @@ export async function createAttachment(
 ): Promise<CreateAttachmentResult> {
   const { actorUserId, itemId, fileName, contentType, sizeBytes, storageKey } = input;
 
-  const item = await database.item.findUnique({ where: { id: itemId } });
-  if (!item) {
-    return { status: "item-not-found" };
-  }
-
-  const access = await resolveItemAccess(database, { userId: actorUserId, itemId });
-  if (!meetsListAccessLevel(access, REQUIRED_ACCESS_LEVEL)) {
-    return { status: "forbidden" };
+  const authorization = await authorizeAttachmentUpload(database, { actorUserId, itemId });
+  if (authorization.status !== "ok") {
+    return authorization;
   }
 
   const validation = validateAttachmentUpload({ contentType, sizeBytes });

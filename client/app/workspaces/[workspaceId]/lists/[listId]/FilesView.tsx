@@ -1,14 +1,5 @@
+import { formatAttachmentSize } from "@/lib/item/item-attachments";
 import type { FilesViewEntry } from "@/lib/list/list-files";
-
-function formatFileSize(sizeBytes: number): string {
-  if (sizeBytes < 1024) {
-    return `${sizeBytes} B`;
-  }
-  if (sizeBytes < 1024 * 1024) {
-    return `${(sizeBytes / 1024).toFixed(1)} KB`;
-  }
-  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
@@ -53,7 +44,7 @@ export function FilesView({
             </a>
           </div>
           <div className="flex-shrink-0 text-right text-xs text-neutral-600">
-            <div>{formatFileSize(entry.sizeBytes)}</div>
+            <div>{formatAttachmentSize(entry.sizeBytes)}</div>
             <div>
               {entry.uploaderName} · {formatDate(entry.createdAt)}
             </div>

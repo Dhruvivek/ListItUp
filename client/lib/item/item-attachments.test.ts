@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { MAX_ATTACHMENT_SIZE_BYTES, validateAttachmentUpload } from "./item-attachments";
+import { formatAttachmentSize, MAX_ATTACHMENT_SIZE_BYTES, validateAttachmentUpload } from "./item-attachments";
 
 // An allowed content type within the size cap passes.
 assert.deepEqual(
@@ -33,5 +33,10 @@ assert.deepEqual(
   validateAttachmentUpload({ contentType: "application/zip", sizeBytes: MAX_ATTACHMENT_SIZE_BYTES }),
   { status: "ok" }
 );
+
+// formatAttachmentSize picks the coarsest readable unit.
+assert.equal(formatAttachmentSize(512), "512 B");
+assert.equal(formatAttachmentSize(2048), "2.0 KB");
+assert.equal(formatAttachmentSize(5 * 1024 * 1024), "5.0 MB");
 
 console.log("item attachments test passed");

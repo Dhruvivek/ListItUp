@@ -34,10 +34,17 @@ function getObjectStorageClient(): S3Client {
   return cachedClient;
 }
 
+// The original file name is untrusted input — strip path separators and
+// control characters so it can't reshape the storage key's path, and cap
+// its length well under S3's 1024-byte key limit.
+const UNSAFE_KEY_CHARACTERS = /[\\/\x00-\x1f]+/g;
+const MAX_KEY_FILENAME_LENGTH = 200;
+
 // A storage key scoped under the owning Item, with a random component so
 // two Attachments with the same original file name never collide.
 export function buildAttachmentStorageKey(itemId: string, fileName: string): string {
-  return `items/${itemId}/${randomUUID()}-${fileName}`;
+  const safeFileName = fileName.replaceAll(UNSAFE_KEY_CHARACTERS, "_").slice(0, MAX_KEY_FILENAME_LENGTH);
+  return `items/${itemId}/${randomUUID()}-${safeFileName}`;
 }
 
 export async function uploadAttachmentObject(input: {
