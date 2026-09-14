@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ListItUp — Design Mocks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<link rel="stylesheet" href="shared/theme.css" />
+<style>
+  body { background: var(--bg-0); }
+  .mock-card { text-decoration:none; display:block; }
+  .mock-card .ln-card { padding:20px; transition: border-color .15s ease, transform .15s ease; }
+  .mock-card:hover .ln-card { border-color: var(--orange); transform: translateY(-2px); }
+  .soon-card { padding:16px; }
+</style>
+</head>
+<body>
+  <div class="max-w-5xl mx-auto px-8 py-14">
+    <div class="font-mono-label text-[11px] mb-3" style="color:var(--orange-light)">ListItUp · Design Mocks</div>
+    <h1 class="text-[30px] font-semibold tracking-tight mb-2" style="color:var(--ink)">Page mockups awaiting review</h1>
+    <p class="text-[13.5px] max-w-xl mb-8" style="color:var(--ink-muted)">Static HTML/Tailwind prototypes, one folder per page, styled from <code class="font-mono-label normal-case" style="color:var(--ink)">DESIGN.md</code>. Nothing here is wired to the app yet — once a design is finalized it gets implemented in <code class="font-mono-label normal-case" style="color:var(--ink)">client/app/</code>.</p>
+
+    <a class="mock-card block mb-10" href="mother/index.html">
+      <div class="ln-card p-6" style="border-color:var(--orange); background:linear-gradient(135deg, var(--bg-2), var(--bg-3))">
+        <div class="flex items-center justify-between">
+          <div class="flex items-start gap-4">
+            <div class="w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0" style="background:var(--orange-dim)">
+              <i data-lucide="mouse-pointer-click" class="w-5 h-5" style="color:var(--orange-light)"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-[16px] font-semibold" style="color:var(--ink)">Interactive Prototype</span>
+                <span class="ln-badge ln-badge-red font-mono-label">Click through it</span>
+              </div>
+              <div class="text-[13px]" style="color:var(--ink-muted)">Home, My Tasks, and List (List view + Dashboard) wired together in one clickable shell — nav, tabs, checkboxes, the item drawer, Quick-Add, section actions, filters, and the peer-comparison toggle all actually work.</div>
+            </div>
+          </div>
+          <i data-lucide="arrow-right" class="w-5 h-5 flex-shrink-0" style="color:var(--orange-light)"></i>
+        </div>
+      </div>
+    </a>
+
+    <div class="font-mono-label text-[11px] mb-4" style="color:var(--ink-faint)">Individual page mocks (static)</div>
+    <div class="grid grid-cols-2 gap-5 mb-14">
+      <a class="mock-card" href="home/index.html">
+        <div class="ln-card">
+          <div class="flex items-center justify-between mb-3">
+            <i data-lucide="home" class="w-5 h-5" style="color:var(--orange-light)"></i>
+            <span class="ln-badge ln-badge-green">Ready for review</span>
+          </div>
+          <div class="text-[15px] font-semibold mb-1" style="color:var(--ink)">Home</div>
+          <div class="text-[12.5px]" style="color:var(--ink-muted)">Greeting header, My Tasks preview, Recent Lists, Items I've Assigned — #46</div>
+        </div>
+      </a>
+
+      <a class="mock-card" href="my-tasks/index.html">
+        <div class="ln-card">
+          <div class="flex items-center justify-between mb-3">
+            <i data-lucide="list-checks" class="w-5 h-5" style="color:var(--orange-light)"></i>
+            <span class="ln-badge ln-badge-green">Ready for review</span>
+          </div>
+          <div class="text-[15px] font-semibold mb-1" style="color:var(--ink)">My Tasks</div>
+          <div class="text-[12.5px]" style="color:var(--ink-muted)">Quick-Add, filters, default sort/visibility, view tabs — #42–45</div>
+        </div>
+      </a>
+
+      <a class="mock-card" href="list-view/index.html">
+        <div class="ln-card">
+          <div class="flex items-center justify-between mb-3">
+            <i data-lucide="layout-list" class="w-5 h-5" style="color:var(--orange-light)"></i>
+            <span class="ln-badge ln-badge-green">Ready for review</span>
+          </div>
+          <div class="text-[15px] font-semibold mb-1" style="color:var(--ink)">List View</div>
+          <div class="text-[12.5px]" style="color:var(--ink-muted)">Sections, item rows, item-detail drawer with all facets — #29, #30, #34, #35, #37</div>
+        </div>
+      </a>
+
+      <a class="mock-card" href="list-dashboard/index.html">
+        <div class="ln-card">
+          <div class="flex items-center justify-between mb-3">
+            <i data-lucide="bar-chart-3" class="w-5 h-5" style="color:var(--orange-light)"></i>
+            <span class="ln-badge ln-badge-green">Ready for review</span>
+          </div>
+          <div class="text-[15px] font-semibold mb-1" style="color:var(--ink)">List Dashboard</div>
+          <div class="text-[12.5px]" style="color:var(--ink-muted)">Counts, heatmap, progress, contribution map, radar, peer comparison — #51, #54–58</div>
+        </div>
+      </a>
+    </div>
+
+    <div class="font-mono-label text-[11px] mb-4" style="color:var(--ink-faint)">Up next — not built yet</div>
+    <div class="grid grid-cols-3 gap-3">
+      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">List Browsing</div><div class="text-[11px]" style="color:var(--ink-faint)">#26</div></div>
+      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">List Overview tab</div><div class="text-[11px]" style="color:var(--ink-faint)">#27</div></div>
+      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">List Roles &amp; Guests</div><div class="text-[11px]" style="color:var(--ink-faint)">#28</div></div>
+      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">Board View</div><div class="text-[11px]" style="color:var(--ink-faint)">#31</div></div>
+      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">Calendar View</div><div class="text-[11px]" style="color:var(--ink-faint)">#32</div></div>
+      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">Timeline View</div><div class="text-[11px]" style="color:var(--ink-faint)">#33</div></div>
+      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">Files View</div><div class="text-[11px]" style="color:var(--ink-faint)">#36</div></div>
+      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">Archived Items</div><div class="text-[11px]" style="color:var(--ink-faint)">#38</div></div>
+      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">Profile</div><div class="text-[11px]" style="color:var(--ink-faint)">#40</div></div>
+      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">Updates</div><div class="text-[11px]" style="color:var(--ink-faint)">#47–49</div></div>
+      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">My Tasks Dashboard</div><div class="text-[11px]" style="color:var(--ink-faint)">#52</div></div>
+      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">Workspace Switcher / Nav</div><div class="text-[11px]" style="color:var(--ink-faint)">#39</div></div>
+    </div>
+  </div>
+
+<script>lucide.createIcons();</script>
+</body>
+</html>

@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>List Dashboard — ListItUp design mock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<link rel="stylesheet" href="../shared/theme.css" />
+<style>
+  body { background: var(--bg-0); }
+  .widget-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
+  .stat-num { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+  .hm-cell { width: 11px; height: 11px; border-radius: 2.5px; }
+  .why-tag { font-family: var(--font-mono); font-size: 9.5px; letter-spacing:.06em; color: var(--ink-faint); }
+  .toggle { width: 34px; height: 19px; border-radius: 999px; background: var(--bg-4); border: 1px solid var(--border-strong); position: relative; cursor: pointer; flex-shrink:0; }
+  .toggle .knob { width: 13px; height: 13px; border-radius: 999px; background: var(--ink-muted); position: absolute; top: 2px; left: 2px; transition: all .15s ease; }
+  .toggle.on { background: var(--orange-dim); border-color: var(--orange); }
+  .toggle.on .knob { left: 17px; background: var(--orange); }
+</style>
+</head>
+<body>
+
+<div class="ln-shell">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="ln-sidebar">
+    <div class="ln-workspace-switcher mb-2">
+      <div class="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold" style="background:var(--orange); color:#1a0800; font-family:var(--font-mono);">AS</div>
+      <div class="flex-1 min-w-0">
+        <div class="text-[13px] font-semibold truncate" style="color:var(--ink)">Acme Studio</div>
+        <div class="font-mono-label text-[9px]" style="color:var(--ink-faint)">Workspace</div>
+      </div>
+      <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5" style="color:var(--ink-faint)"></i>
+    </div>
+
+    <nav class="mt-2">
+      <div class="ln-nav-item"><i data-lucide="home"></i> Home</div>
+      <div class="ln-nav-item"><i data-lucide="list-checks"></i> My Tasks</div>
+      <div class="ln-nav-item"><i data-lucide="bell"></i> Updates <span class="ln-nav-badge">6</span></div>
+    </nav>
+
+    <div class="ln-nav-section-label" style="padding-top:16px">Lists</div>
+    <div class="ln-nav-item active"><i data-lucide="layout-list"></i> Platform Retrofit — Phase 2</div>
+    <div class="ln-nav-item"><i data-lucide="layout-list"></i> Client Deliverables</div>
+    <div class="ln-nav-item"><i data-lucide="layout-list"></i> Vendor Onboarding</div>
+
+    <div class="ln-nav-section-label flex items-center gap-1 cursor-pointer">
+      <i data-lucide="chevron-right" class="w-3 h-3"></i> Personal Space
+    </div>
+
+    <div class="mt-auto pt-4 border-t" style="border-color:var(--border)">
+      <div class="ln-nav-item"><div class="ln-avatar" style="background:var(--blue)">RK</div> Riya Kapoor</div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <div class="ln-main">
+    <header class="ln-topbar">
+      <div class="flex items-center gap-2 min-w-0">
+        <i data-lucide="layout-list" class="w-4 h-4 flex-shrink-0" style="color:var(--orange-light)"></i>
+        <span class="text-[13px] font-semibold truncate" style="color:var(--ink)">Platform Retrofit — Phase 2</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <button class="ln-btn ln-btn-ghost"><i data-lucide="download"></i> Export CSV</button>
+        <button class="ln-icon-btn"><i data-lucide="settings"></i></button>
+      </div>
+    </header>
+
+    <div class="ln-content">
+
+      <!-- Tabs -->
+      <div class="flex items-center gap-6 border-b mb-6" style="border-color:var(--border)">
+        <div class="ln-tab"><i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i> Overview</div>
+        <div class="ln-tab"><i data-lucide="list" class="w-3.5 h-3.5"></i> List</div>
+        <div class="ln-tab"><i data-lucide="columns-3" class="w-3.5 h-3.5"></i> Board</div>
+        <div class="ln-tab"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> Calendar</div>
+        <div class="ln-tab"><i data-lucide="gantt-chart" class="w-3.5 h-3.5"></i> Timeline</div>
+        <div class="ln-tab"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i> Files</div>
+        <div class="ln-tab active"><i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i> Dashboard</div>
+        <div class="ln-tab disabled"><i data-lucide="message-square" class="w-3.5 h-3.5"></i> Messages <span class="ln-badge ln-badge-muted ml-1">v2</span></div>
+      </div>
+
+      <!-- Count widgets -->
+      <div class="grid grid-cols-4 gap-4 mb-5">
+        <div class="ln-card p-4">
+          <div class="widget-title mb-2">Total Items</div>
+          <div class="stat-num" style="color:var(--ink)">64</div>
+        </div>
+        <div class="ln-card p-4">
+          <div class="widget-title mb-2">Completed</div>
+          <div class="stat-num" style="color:var(--green)">37</div>
+        </div>
+        <div class="ln-card p-4">
+          <div class="widget-title mb-2">Incomplete</div>
+          <div class="stat-num" style="color:var(--ink)">27</div>
+        </div>
+        <div class="ln-card p-4">
+          <div class="widget-title mb-2">Overdue</div>
+          <div class="stat-num" style="color:var(--red)">6</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-5 mb-5">
+
+        <!-- Breakdown by Section -->
+        <div class="ln-card p-5">
+          <div class="widget-title mb-4">Breakdown by Section</div>
+          <div class="flex flex-col gap-3">
+            <div>
+              <div class="flex justify-between text-[12px] mb-1"><span style="color:var(--ink-muted)">Design & Specification</span><span style="color:var(--ink-faint)">24</span></div>
+              <div class="h-1.5 rounded-full" style="background:var(--bg-4)"><div class="h-1.5 rounded-full" style="width:75%;background:var(--orange)"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-[12px] mb-1"><span style="color:var(--ink-muted)">Procurement</span><span style="color:var(--ink-faint)">18</span></div>
+              <div class="h-1.5 rounded-full" style="background:var(--bg-4)"><div class="h-1.5 rounded-full" style="width:56%;background:var(--orange)"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-[12px] mb-1"><span style="color:var(--ink-muted)">Installation</span><span style="color:var(--ink-faint)">14</span></div>
+              <div class="h-1.5 rounded-full" style="background:var(--bg-4)"><div class="h-1.5 rounded-full" style="width:44%;background:var(--orange)"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-[12px] mb-1"><span style="color:var(--ink-muted)">Sign-off</span><span style="color:var(--ink-faint)">8</span></div>
+              <div class="h-1.5 rounded-full" style="background:var(--bg-4)"><div class="h-1.5 rounded-full" style="width:25%;background:var(--orange)"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Breakdown by State -->
+        <div class="ln-card p-5">
+          <div class="widget-title mb-4">Breakdown by State</div>
+          <div class="flex flex-col gap-3">
+            <div>
+              <div class="flex justify-between text-[12px] mb-1"><span style="color:var(--ink-muted)">Complete</span><span style="color:var(--ink-faint)">37</span></div>
+              <div class="h-1.5 rounded-full" style="background:var(--bg-4)"><div class="h-1.5 rounded-full" style="width:58%;background:var(--green)"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-[12px] mb-1"><span style="color:var(--ink-muted)">In Progress</span><span style="color:var(--ink-faint)">12</span></div>
+              <div class="h-1.5 rounded-full" style="background:var(--bg-4)"><div class="h-1.5 rounded-full" style="width:19%;background:var(--blue)"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-[12px] mb-1"><span style="color:var(--ink-muted)">To Do</span><span style="color:var(--ink-faint)">9</span></div>
+              <div class="h-1.5 rounded-full" style="background:var(--bg-4)"><div class="h-1.5 rounded-full" style="width:14%;background:var(--ink-faint)"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-[12px] mb-1"><span style="color:var(--ink-muted)">Blocked</span><span style="color:var(--ink-faint)">6</span></div>
+              <div class="h-1.5 rounded-full" style="background:var(--bg-4)"><div class="h-1.5 rounded-full" style="width:9%;background:var(--amber)"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Progress graph -->
+        <div class="ln-card p-5 flex flex-col items-center justify-center">
+          <div class="widget-title self-start mb-1">Progress</div>
+          <div class="why-tag self-start mb-3">Toward fully done</div>
+          <svg width="120" height="120" viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="50" fill="none" stroke="var(--bg-4)" stroke-width="10"/>
+            <circle cx="60" cy="60" r="50" fill="none" stroke="var(--orange)" stroke-width="10"
+              stroke-linecap="round" stroke-dasharray="314.159" stroke-dashoffset="100.5"
+              transform="rotate(-90 60 60)"/>
+            <text x="60" y="66" text-anchor="middle" font-family="Inter" font-size="24" font-weight="700" fill="#e5e5e0">68%</text>
+          </svg>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-5 mb-5">
+
+        <!-- Completion-Over-Time -->
+        <div class="ln-card p-5">
+          <div class="widget-title mb-1">Completion Over Time</div>
+          <div class="why-tag mb-4">Is completion on track?</div>
+          <svg viewBox="0 0 480 130" class="w-full" style="max-height:130px">
+            <defs>
+              <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#ff6b4a" stop-opacity="0.35"/>
+                <stop offset="100%" stop-color="#ff6b4a" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <g stroke="var(--border)" stroke-width="1">
+              <line x1="0" y1="20" x2="480" y2="20"/>
+              <line x1="0" y1="60" x2="480" y2="60"/>
+              <line x1="0" y1="100" x2="480" y2="100"/>
+            </g>
+            <path d="M0,110 L60,100 L120,92 L180,78 L240,70 L300,52 L360,44 L420,28 L480,18 L480,130 L0,130 Z" fill="url(#areaGrad)"/>
+            <polyline points="0,110 60,100 120,92 180,78 240,70 300,52 360,44 420,28 480,18"
+              fill="none" stroke="var(--orange)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <g fill="var(--orange)">
+              <circle cx="0" cy="110" r="3"/><circle cx="120" cy="92" r="3"/><circle cx="240" cy="70" r="3"/><circle cx="360" cy="44" r="3"/><circle cx="480" cy="18" r="3.5"/>
+            </g>
+          </svg>
+          <div class="flex justify-between text-[10.5px] mt-1" style="color:var(--ink-faint)">
+            <span>Aug 18</span><span>Aug 25</span><span>Sep 1</span><span>Sep 8</span><span>Sep 14</span>
+          </div>
+        </div>
+
+        <!-- Completion heatmap -->
+        <div class="ln-card p-5">
+          <div class="widget-title mb-1">Completion Heatmap</div>
+          <div class="why-tag mb-4">Rhythm of work — aggregated, not per-Member</div>
+          <div id="heatmap" class="flex gap-[3px]"></div>
+          <div class="flex items-center gap-1.5 mt-3 justify-end">
+            <span class="text-[10px]" style="color:var(--ink-faint)">Less</span>
+            <span class="hm-cell" style="background:var(--bg-4)"></span>
+            <span class="hm-cell" style="background:rgba(255,107,74,.25)"></span>
+            <span class="hm-cell" style="background:rgba(255,107,74,.5)"></span>
+            <span class="hm-cell" style="background:rgba(255,107,74,.75)"></span>
+            <span class="hm-cell" style="background:#ff6b4a"></span>
+            <span class="text-[10px]" style="color:var(--ink-faint)">More</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-5 mb-5">
+
+        <!-- Contribution map -->
+        <div class="ln-card p-5">
+          <div class="widget-title mb-1">Contribution Map</div>
+          <div class="why-tag mb-4">Who is moving work forward — normalized rate, not raw count</div>
+          <div class="flex flex-col gap-3">
+            <div class="flex items-center gap-3">
+              <div class="ln-avatar" style="background:var(--orange-light)">RK</div>
+              <span class="text-[12.5px] w-24 flex-shrink-0" style="color:var(--ink)">Riya Kapoor</span>
+              <div class="flex-1 h-2 rounded-full" style="background:var(--bg-4)"><div class="h-2 rounded-full" style="width:82%;background:var(--orange)"></div></div>
+              <span class="text-[11.5px] font-mono-label w-10 text-right" style="color:var(--ink-muted)">82%</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="ln-avatar" style="background:var(--green)">MT</div>
+              <span class="text-[12.5px] w-24 flex-shrink-0" style="color:var(--ink)">Maya Torres</span>
+              <div class="flex-1 h-2 rounded-full" style="background:var(--bg-4)"><div class="h-2 rounded-full" style="width:64%;background:var(--orange)"></div></div>
+              <span class="text-[11.5px] font-mono-label w-10 text-right" style="color:var(--ink-muted)">64%</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="ln-avatar" style="background:var(--blue)">PS</div>
+              <span class="text-[12.5px] w-24 flex-shrink-0" style="color:var(--ink)">Priya Shah</span>
+              <div class="flex-1 h-2 rounded-full" style="background:var(--bg-4)"><div class="h-2 rounded-full" style="width:47%;background:var(--orange)"></div></div>
+              <span class="text-[11.5px] font-mono-label w-10 text-right" style="color:var(--ink-muted)">47%</span>
+            </div>
+          </div>
+          <div class="text-[11px] mt-4" style="color:var(--ink-faint)">Completion rate = Items completed ÷ Items assigned. Never a raw count.</div>
+        </div>
+
+        <!-- Radar chart -->
+        <div class="ln-card p-5">
+          <div class="widget-title mb-1">Attention Imbalance</div>
+          <div class="why-tag mb-2">Where is attention skewed across the List's people</div>
+          <div class="flex items-center gap-4">
+            <svg width="180" height="180" viewBox="0 0 180 180" class="flex-shrink-0">
+              <!-- grid rings -->
+              <polygon points="90,20 160,90 90,160 20,90" fill="none" stroke="var(--border)" stroke-width="1"/>
+              <polygon points="90,38 142,90 90,142 38,90" fill="none" stroke="var(--border)" stroke-width="1"/>
+              <polygon points="90,56 124,90 90,124 56,90" fill="none" stroke="var(--border)" stroke-width="1"/>
+              <line x1="90" y1="20" x2="90" y2="160" stroke="var(--border)" stroke-width="1"/>
+              <line x1="20" y1="90" x2="160" y2="90" stroke="var(--border)" stroke-width="1"/>
+              <!-- Riya -->
+              <polygon points="90,32 138,90 100,146 46,100" fill="rgba(255,107,74,.18)" stroke="var(--orange)" stroke-width="2"/>
+              <!-- Maya -->
+              <polygon points="90,50 118,90 90,130 58,84" fill="rgba(91,157,255,.12)" stroke="var(--blue)" stroke-width="2"/>
+              <text x="90" y="12" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#8f8f8a">TO DO</text>
+              <text x="172" y="93" text-anchor="end" font-family="JetBrains Mono" font-size="9" fill="#8f8f8a">BLOCKED</text>
+              <text x="90" y="174" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#8f8f8a">OVERDUE</text>
+              <text x="8" y="93" text-anchor="start" font-family="JetBrains Mono" font-size="9" fill="#8f8f8a">DONE</text>
+            </svg>
+            <div class="flex flex-col gap-2">
+              <div class="flex items-center gap-2 text-[12px]"><span class="ln-dot" style="background:var(--orange)"></span> Riya Kapoor</div>
+              <div class="flex items-center gap-2 text-[12px]"><span class="ln-dot" style="background:var(--blue)"></span> Maya Torres</div>
+              <div class="text-[11px] mt-1" style="color:var(--ink-faint)">Normalized per Member, not raw count.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Peer comparison setting -->
+      <div class="ln-card p-5 flex items-center justify-between">
+        <div class="flex items-start gap-3">
+          <i data-lucide="users" class="w-4 h-4 mt-0.5" style="color:var(--ink-faint)"></i>
+          <div>
+            <div class="text-[13px] font-semibold" style="color:var(--ink)">Peer comparison</div>
+            <div class="text-[12px] mt-0.5" style="color:var(--ink-muted)">Workspace-level, off by default. When enabled, unlocks a directly comparative view on top of the Contribution Map and Radar Chart above — still normalized metrics, never raw counts. Only a Workspace Owner or Admin can change this.</div>
+          </div>
+        </div>
+        <div class="toggle flex-shrink-0"><div class="knob"></div></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+lucide.createIcons();
+const hm = document.getElementById('heatmap');
+const weeks = 12;
+const intensity = [0,0,1,2,0,1,3,2,1,0,2,4,1,0,3,2,1,0,0,1,2,3,4,2,1,0,1,2,3,1,0,0,2,3,4,3,2,1,0,1,2,3,4,3,2,1,0,0,1,2,3,4,2,1,0,1,2,3,2,1,0,0,1,2,3,4,3,2,1,0,1,2,3,4,3,2,1,0,1,2,3,4,3,2];
+const colors = ['var(--bg-4)','rgba(255,107,74,.25)','rgba(255,107,74,.5)','rgba(255,107,74,.75)','#ff6b4a'];
+for (let w = 0; w < weeks; w++) {
+  const col = document.createElement('div');
+  col.className = 'flex flex-col gap-[3px]';
+  for (let d = 0; d < 7; d++) {
+    const cell = document.createElement('div');
+    cell.className = 'hm-cell';
+    cell.style.background = colors[intensity[w*7+d] || 0];
+    col.appendChild(cell);
+  }
+  hm.appendChild(col);
+}
+</script>
+</body>
+</html>
