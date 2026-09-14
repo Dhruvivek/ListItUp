@@ -1,6 +1,7 @@
 import type { ItemPriority, ItemState, ListStatus, PrismaClient } from "@/generated/prisma/client";
 import { groupItemsForBoard, isValidBoardGroupBy, type BoardColumn, type BoardItem } from "@/lib/list/list-board";
 import { getListRoles, type ListRoles } from "@/lib/list/list-roles";
+import { buildTimelineItems, type TimelineItem } from "@/lib/list/list-timeline";
 import {
   meetsListAccessLevel,
   resolveListAccess,
@@ -58,6 +59,9 @@ export type ListPageData = {
   // and per-card "move to" affordance, same reasoning as the Item detail
   // page's assignableMembers (#30).
   assignableMembers: EligibleWorkspaceMember[];
+  // Timeline view's date bars (#33) — every non-Archived Item with a due
+  // date, sorted earliest-due-first; Dependency arrows are not rendered.
+  timelineItems: TimelineItem[];
 };
 
 // Kept separate from the page component (same rationale as the
@@ -147,6 +151,17 @@ export async function loadListPageData(
     sections.map((section) => ({ id: section.id, name: section.name })),
     assignableMembers
   );
+  const timelineItems = buildTimelineItems(
+    items.map((item) => ({
+      id: item.id,
+      title: item.title,
+      state: item.state,
+      priority: item.priority,
+      hasParent: item.parentId !== null,
+      startDate: item.startDate,
+      dueDate: item.dueDate,
+    }))
+  );
 
   return {
     listId: list.id,
@@ -171,5 +186,6 @@ export async function loadListPageData(
     boardGroupBy,
     boardColumns,
     assignableMembers,
+    timelineItems,
   };
 }

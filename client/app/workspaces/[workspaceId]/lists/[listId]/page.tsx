@@ -22,6 +22,7 @@ import {
 import { BoardView } from "./BoardView";
 import { loadListPageData, type ListPageData } from "./page-data";
 import { SectionList } from "./SectionList";
+import { TimelineView } from "./TimelineView";
 
 type Props = {
   params: Promise<{ workspaceId: string; listId: string }>;
@@ -55,13 +56,12 @@ function isTabKey(value: string): value is TabKey {
   return TAB_KEYS.includes(value);
 }
 
-// #32, #36, #33 respectively — these views ship in their own tickets.
+// #32, #36 respectively — these views ship in their own tickets.
 // Dashboard and Messages are this spec's deliberately reserved
 // placeholders (Reports & Analytics, and the v2 Chat/VC work).
-const TAB_NOTES: Record<Exclude<TabKey, "overview" | "list" | "board">, string> = {
+const TAB_NOTES: Record<Exclude<TabKey, "overview" | "list" | "board" | "timeline">, string> = {
   calendar: "Calendar view ships in its own ticket (#32).",
   files: "Files view ships in its own ticket (#36).",
-  timeline: "Timeline view ships in its own ticket (#33).",
   dashboard: "Reserved — Dashboard content ships with the Reports & Analytics spec.",
   messages: "Reserved — Messages ships with the v2 Chat/VC system.",
 };
@@ -322,6 +322,8 @@ export default async function ListPage({ params, searchParams }: Props) {
             boundSetGroupBy={boundSetBoardGroupBy}
             boundMoveItem={boundMoveItem}
           />
+        ) : activeTab === "timeline" ? (
+          <TimelineView items={data.timelineItems} workspaceId={workspaceId} listId={listId} />
         ) : (
           <div className="mt-10 rounded-lg border border-dashed border-neutral-800 px-4 py-16 text-center text-sm text-neutral-600">
             {TAB_NOTES[activeTab]}

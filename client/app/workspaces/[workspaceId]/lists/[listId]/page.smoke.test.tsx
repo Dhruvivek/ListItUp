@@ -263,6 +263,95 @@ async function run() {
         ["Blocked Item"]
       );
     }
+
+    // Timeline view returns only Items with a due date, sorted
+    // earliest-due-first, with their start date carried through where
+    // present, for a given User's effective access (#33).
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const memberId = await createUser();
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: memberId, role: "MEMBER" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: memberId, role: "MEMBER" },
+      });
+      await prisma.item.create({
+        data: {
+          id: randomUUID(),
+          listId,
+          title: "Later, With Start",
+          creatorId: memberId,
+          startDate: new Date("2026-10-10T00:00:00.000Z"),
+          dueDate: new Date("2026-10-20T00:00:00.000Z"),
+        },
+      });
+      await prisma.item.create({
+        data: {
+          id: randomUUID(),
+          listId,
+          title: "Earlier, No Start",
+          creatorId: memberId,
+          dueDate: new Date("2026-10-01T00:00:00.000Z"),
+        },
+      });
+      await prisma.item.create({
+        data: { id: randomUUID(), listId, title: "No Due Date", creatorId: memberId },
+      });
+      await prisma.item.create({
+        data: {
+          id: randomUUID(),
+          listId,
+          title: "Archived, Has Due Date",
+          creatorId: memberId,
+          state: "ARCHIVED",
+          dueDate: new Date("2026-10-05T00:00:00.000Z"),
+        },
+      });
+
+      const data = await loadListPageData(prisma, { userId: memberId, workspaceId, listId });
+
+      assert.ok(data);
+      assert.deepEqual(
+        data!.timelineItems.map((item) => item.title),
+        ["Earlier, No Start", "Later, With Start"],
+        "Items with no due date and Archived Items are excluded; the rest sort earliest-due-first"
+      );
+      const withStart = data!.timelineItems.find((item) => item.title === "Later, With Start")!;
+      assert.equal(withStart.startDate?.toISOString(), "2026-10-10T00:00:00.000Z");
+      const withoutStart = data!.timelineItems.find((item) => item.title === "Earlier, No Start")!;
+      assert.equal(withoutStart.startDate, null);
+    }
+
+    // A List Viewer has read access to Timeline data too — Timeline is a
+    // read-only view, so >=READ is sufficient (no separate manage-gate).
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const viewerId = await createUser();
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: viewerId, role: "MEMBER" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: viewerId, role: "VIEWER" },
+      });
+      await prisma.item.create({
+        data: {
+          id: randomUUID(),
+          listId,
+          title: "Visible to Viewer",
+          creatorId: viewerId,
+          dueDate: new Date("2026-10-01T00:00:00.000Z"),
+        },
+      });
+
+      const data = await loadListPageData(prisma, { userId: viewerId, workspaceId, listId });
+
+      assert.ok(data);
+      assert.deepEqual(
+        data!.timelineItems.map((item) => item.title),
+        ["Visible to Viewer"]
+      );
+    }
   } finally {
     const listIds = (
       await prisma.list.findMany({ where: { workspaceId: { in: createdWorkspaceIds } } })

@@ -274,6 +274,9 @@ model Item {
   parentId  String?
   sectionId String?
   title     String
+  // Timeline view's date-bar start (#33) — optional and independent of
+  // dueDate, which remains the only date required to appear on Timeline.
+  startDate DateTime?
   dueDate   DateTime?
   state     ItemState    @default(TO_DO)
   priority  ItemPriority @default(NORMAL)
