@@ -59,7 +59,7 @@ async function run() {
     // The creator becomes the List's first Lead, and no other Workspace
     // Member gets implicit access from that.
     {
-      const { workspaceId, memberId: creatorId } = await createWorkspaceWithMember("MEMBER");
+      const { workspaceId, memberId: creatorId } = await createWorkspaceWithMember("OWNER");
       const bystanderId = await addWorkspaceMember(workspaceId, "MEMBER");
 
       const result = await createList(prisma, {
@@ -108,6 +108,49 @@ async function run() {
       assert.deepEqual(result, { status: "creator-lacks-workspace-membership" });
       const lists = await prisma.list.findMany({ where: { workspaceId } });
       assert.equal(lists.length, 0, "no List must be created when the creator lacks Workspace membership");
+    }
+
+    // A Workspace Admin can also create a List.
+    {
+      const { workspaceId, memberId: adminId } = await createWorkspaceWithMember("ADMIN");
+
+      const result = await createList(prisma, {
+        workspaceId,
+        creatorUserId: adminId,
+        name: "Admin-created List",
+      });
+
+      assert.equal(result.status, "created");
+    }
+
+    // A Workspace Member without Admin/Owner rights cannot create a List
+    // (ADR 0009): List creation stays restricted even though the User does
+    // belong to the Workspace.
+    {
+      const { workspaceId, memberId } = await createWorkspaceWithMember("MEMBER");
+
+      const result = await createList(prisma, {
+        workspaceId,
+        creatorUserId: memberId,
+        name: "Should not exist",
+      });
+
+      assert.deepEqual(result, { status: "creator-lacks-required-role" });
+      const lists = await prisma.list.findMany({ where: { workspaceId } });
+      assert.equal(lists.length, 0, "no List must be created when the creator lacks the required role");
+    }
+
+    // A Workspace Viewer cannot create a List either.
+    {
+      const { workspaceId, memberId: viewerId } = await createWorkspaceWithMember("VIEWER");
+
+      const result = await createList(prisma, {
+        workspaceId,
+        creatorUserId: viewerId,
+        name: "Should not exist",
+      });
+
+      assert.deepEqual(result, { status: "creator-lacks-required-role" });
     }
   } finally {
     const listIds = (

@@ -164,6 +164,9 @@ model List {
   description String?
   status      ListStatus   @default(ON_TRACK)
   isInbox     Boolean      @default(false)
+  // Soft-delete: archiving never removes data, so restore is always safe
+  // (#26). Null means active.
+  archivedAt  DateTime?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
