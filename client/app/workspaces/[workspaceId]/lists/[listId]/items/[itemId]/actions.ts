@@ -4,8 +4,12 @@ import { revalidatePath } from "next/cache";
 
 import type { ItemPriority, ItemState } from "@/generated/prisma/client";
 import { addAssignee, removeAssignee } from "@/lib/item/item-assignment";
+import { setCustomFieldValue } from "@/lib/item/item-custom-fields";
 import { createItem } from "@/lib/item/item-creation";
 import { isValidItemState, transitionItemState, updateItem } from "@/lib/item/item-lifecycle";
+import { applyLabel, removeLabel } from "@/lib/item/item-labels";
+import { createCustomFieldDefinition } from "@/lib/list/list-custom-fields";
+import { createLabel } from "@/lib/list/list-labels";
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticatedSession } from "@/lib/session/require-authenticated-session";
 
@@ -103,5 +107,96 @@ export async function addChildItemAction(
   }
 
   await createItem(prisma, { actorUserId: session.user.id, listId, title, parentId: itemId });
+  revalidatePath(itemPath(workspaceId, listId, itemId));
+}
+
+export async function applyExistingLabelAction(
+  workspaceId: string,
+  listId: string,
+  itemId: string,
+  formData: FormData
+): Promise<void> {
+  const session = await requireAuthenticatedSession(itemPath(workspaceId, listId, itemId));
+  const labelId = String(formData.get("labelId") ?? "");
+
+  if (!labelId) {
+    return;
+  }
+
+  await applyLabel(prisma, { actorUserId: session.user.id, itemId, labelId });
+  revalidatePath(itemPath(workspaceId, listId, itemId));
+}
+
+export async function removeItemLabelAction(
+  workspaceId: string,
+  listId: string,
+  itemId: string,
+  labelId: string
+): Promise<void> {
+  const session = await requireAuthenticatedSession(itemPath(workspaceId, listId, itemId));
+  await removeLabel(prisma, { actorUserId: session.user.id, itemId, labelId });
+  revalidatePath(itemPath(workspaceId, listId, itemId));
+}
+
+// Creates a new Workspace Label and applies it to this Item in one step —
+// there's no standalone Label-management surface yet, so this is the only
+// place a Workspace Owner/Admin can create one (#34).
+export async function createAndApplyLabelAction(
+  workspaceId: string,
+  listId: string,
+  itemId: string,
+  formData: FormData
+): Promise<void> {
+  const session = await requireAuthenticatedSession(itemPath(workspaceId, listId, itemId));
+  const name = String(formData.get("name") ?? "").trim();
+
+  if (!name) {
+    return;
+  }
+
+  const created = await createLabel(prisma, { actorUserId: session.user.id, workspaceId, name });
+  if (created.status === "created") {
+    await applyLabel(prisma, { actorUserId: session.user.id, itemId, labelId: created.labelId });
+  }
+  revalidatePath(itemPath(workspaceId, listId, itemId));
+}
+
+export async function setItemCustomFieldValueAction(
+  workspaceId: string,
+  listId: string,
+  itemId: string,
+  definitionId: string,
+  formData: FormData
+): Promise<void> {
+  const session = await requireAuthenticatedSession(itemPath(workspaceId, listId, itemId));
+  const value = String(formData.get("value") ?? "");
+
+  await setCustomFieldValue(prisma, { actorUserId: session.user.id, itemId, definitionId, value });
+  revalidatePath(itemPath(workspaceId, listId, itemId));
+}
+
+// Defines a new Custom Field on this Item's List — there's no standalone
+// List-settings surface yet, so this is the only place a List Lead/
+// Workspace Admin can define one (#34).
+export async function defineCustomFieldAction(
+  workspaceId: string,
+  listId: string,
+  itemId: string,
+  formData: FormData
+): Promise<void> {
+  const session = await requireAuthenticatedSession(itemPath(workspaceId, listId, itemId));
+  const name = String(formData.get("name") ?? "").trim();
+  const type = String(formData.get("type") ?? "");
+  const optionsRaw = String(formData.get("options") ?? "");
+  const options = optionsRaw
+    .split(",")
+    .map((option) => option.trim())
+    .filter(Boolean);
+
+  if (!name || !type) {
+    return;
+  }
+
+  await createCustomFieldDefinition(prisma, { actorUserId: session.user.id, listId, name, type, options });
   revalidatePath(itemPath(workspaceId, listId, itemId));
 }

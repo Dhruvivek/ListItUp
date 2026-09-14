@@ -160,6 +160,67 @@ async function run() {
       assert.ok(childData);
       assert.equal(childData!.parent?.title, "Parent");
     }
+
+    // Applied Labels and Custom Field values render, with the eligible
+    // pools and create/define affordances gated correctly (#34).
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const memberId = await createUser();
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: memberId, role: "MEMBER" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: memberId, role: "MEMBER" },
+      });
+      const appliedLabel = await prisma.label.create({
+        data: { id: randomUUID(), workspaceId, name: "Structural" },
+      });
+      const otherLabel = await prisma.label.create({
+        data: { id: randomUUID(), workspaceId, name: "Vendor" },
+      });
+      const definition = await prisma.customFieldDefinition.create({
+        data: { id: randomUUID(), listId, name: "Clearance (mm)", type: "NUMBER" },
+      });
+      const item = await prisma.item.create({
+        data: {
+          id: randomUUID(),
+          listId,
+          title: "Has facets",
+          creatorId: memberId,
+          labels: { create: [{ id: randomUUID(), labelId: appliedLabel.id }] },
+          customFieldValues: { create: [{ id: randomUUID(), definitionId: definition.id, value: "1240" }] },
+        },
+      });
+
+      const data = await loadItemDetailData(prisma, { userId: memberId, workspaceId, listId, itemId: item.id });
+
+      assert.ok(data);
+      assert.deepEqual(data!.labels.map((l) => l.name), ["Structural"]);
+      assert.deepEqual(data!.availableLabels, [{ id: otherLabel.id, name: "Vendor" }]);
+      assert.equal(data!.canCreateLabel, false, "a plain Member is not Workspace Owner/Admin");
+      assert.deepEqual(data!.customFieldDefinitions.map((d) => d.name), ["Clearance (mm)"]);
+      assert.equal(data!.customFieldValues[definition.id], "1240");
+      assert.equal(data!.canDefineCustomFields, false, "a plain Member is not a List Lead");
+
+      // A Workspace Admin can create Labels and a List Lead can define
+      // Custom Fields.
+      const adminId = await createUser();
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: adminId, role: "ADMIN" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: adminId, role: "LEAD" },
+      });
+      const adminData = await loadItemDetailData(prisma, {
+        userId: adminId,
+        workspaceId,
+        listId,
+        itemId: item.id,
+      });
+      assert.ok(adminData);
+      assert.equal(adminData!.canCreateLabel, true);
+      assert.equal(adminData!.canDefineCustomFields, true);
+    }
   } finally {
     const listIds = (
       await prisma.list.findMany({ where: { workspaceId: { in: createdWorkspaceIds } } })

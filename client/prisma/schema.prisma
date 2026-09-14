@@ -106,6 +106,7 @@ model Workspace {
   lists       List[]
   members     WorkspaceMember[]
   invitations WorkspaceInvitation[]
+  labels      Label[]
 
   @@map("workspace")
 }
@@ -186,6 +187,7 @@ model List {
   starredBy   Starred[]
   sections    Section[]
   items       Item[]
+  customFieldDefinitions CustomFieldDefinition[]
 
   @@index([workspaceId])
   @@map("list")
@@ -291,6 +293,8 @@ model Item {
   children  Item[]         @relation("ItemHierarchy")
   creator   User           @relation("ItemCreator", fields: [creatorId], references: [id])
   assignees ItemAssignee[]
+  labels    ItemLabel[]
+  customFieldValues CustomFieldValue[]
 
   @@index([listId])
   @@index([sectionId])
@@ -309,6 +313,80 @@ model ItemAssignee {
   @@unique([itemId, userId])
   @@index([userId])
   @@map("item_assignee")
+}
+
+// Creating a Label is gated (Personal-Space-free / Workspace-Owner-Admin
+// in a shared Workspace, mirroring List-creation rights); applying an
+// existing Label to an Item is not — any List Member with Item access can
+// (#34).
+model Label {
+  id          String      @id
+  workspaceId String
+  name        String
+  createdAt   DateTime    @default(now())
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  items       ItemLabel[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("label")
+}
+
+model ItemLabel {
+  id        String   @id
+  itemId    String
+  labelId   String
+  createdAt DateTime @default(now())
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  label     Label    @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, labelId])
+  @@index([labelId])
+  @@map("item_label")
+}
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DROPDOWN
+  DATE
+}
+
+// Defined per List by a List Lead or Workspace Admin; any List Member can
+// set a value on an Item (#34).
+model CustomFieldDefinition {
+  id        String            @id
+  listId    String
+  name      String
+  type      CustomFieldType
+  // DROPDOWN's allowed option strings; unused (empty) for other types.
+  options   String[]          @default([])
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  list      List              @relation(fields: [listId], references: [id], onDelete: Cascade)
+  values    CustomFieldValue[]
+
+  @@unique([listId, name])
+  @@index([listId])
+  @@map("custom_field_definition")
+}
+
+model CustomFieldValue {
+  id           String                 @id
+  itemId       String
+  definitionId String
+  // Stored as text regardless of the definition's type and
+  // parsed/validated against it at the application layer (lib/item/) —
+  // avoids a sparse multi-column value table for 4 possible types.
+  value        String
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  item         Item                   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  definition   CustomFieldDefinition  @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, definitionId])
+  @@index([definitionId])
+  @@map("custom_field_value")
 }
 
 // Better Auth's email-verification tokens are stateless signed JWTs and are

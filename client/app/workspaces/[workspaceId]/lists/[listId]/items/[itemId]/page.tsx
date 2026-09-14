@@ -6,7 +6,12 @@ import { requireAuthenticatedSession } from "@/lib/session/require-authenticated
 import {
   addChildItemAction,
   addItemAssigneeAction,
+  applyExistingLabelAction,
+  createAndApplyLabelAction,
+  defineCustomFieldAction,
   removeItemAssigneeAction,
+  removeItemLabelAction,
+  setItemCustomFieldValueAction,
   transitionItemStateAction,
   updateItemDetailsAction,
 } from "./actions";
@@ -42,6 +47,12 @@ export default async function ItemDetailPage({ params }: Props) {
   const boundAddAssignee = addItemAssigneeAction.bind(null, workspaceId, listId, itemId);
   const boundRemoveAssignee = (userId: string) => removeItemAssigneeAction.bind(null, workspaceId, listId, itemId, userId);
   const boundAddChild = addChildItemAction.bind(null, workspaceId, listId, itemId);
+  const boundApplyExistingLabel = applyExistingLabelAction.bind(null, workspaceId, listId, itemId);
+  const boundRemoveLabel = (labelId: string) => removeItemLabelAction.bind(null, workspaceId, listId, itemId, labelId);
+  const boundCreateAndApplyLabel = createAndApplyLabelAction.bind(null, workspaceId, listId, itemId);
+  const boundSetCustomFieldValue = (definitionId: string) =>
+    setItemCustomFieldValueAction.bind(null, workspaceId, listId, itemId, definitionId);
+  const boundDefineCustomField = defineCustomFieldAction.bind(null, workspaceId, listId, itemId);
 
   const unassignedMembers = data.assignableMembers.filter(
     (member) => !data.assignees.some((assignee) => assignee.userId === member.userId)
@@ -211,6 +222,154 @@ export default async function ItemDetailPage({ params }: Props) {
                 className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:border-[#ff6b4a] hover:text-white"
               >
                 Add
+              </button>
+            </form>
+          )}
+        </div>
+
+        <div className="mt-8">
+          <div className="mb-2 font-mono text-[11px] uppercase tracking-wider text-neutral-500">Labels</div>
+          <div className="flex flex-wrap gap-2">
+            {data.labels.map((label) => (
+              <span
+                key={label.id}
+                className="flex items-center gap-1.5 rounded-full border border-neutral-700 bg-[#141414] px-2.5 py-1 text-xs text-neutral-300"
+              >
+                {label.name}
+                {data.canEdit && (
+                  <form action={boundRemoveLabel(label.id)}>
+                    <button type="submit" className="text-neutral-600 hover:text-[#ff8a70]">
+                      ×
+                    </button>
+                  </form>
+                )}
+              </span>
+            ))}
+            {data.labels.length === 0 && <span className="text-sm text-neutral-600">None yet.</span>}
+          </div>
+          {data.canEdit && data.availableLabels.length > 0 && (
+            <form action={boundApplyExistingLabel} className="mt-3 flex items-center gap-2">
+              <select
+                name="labelId"
+                required
+                defaultValue=""
+                className="rounded-md border border-neutral-700 bg-[#141414] px-2 py-1.5 text-sm text-neutral-200"
+              >
+                <option value="" disabled>
+                  Apply a Label…
+                </option>
+                {data.availableLabels.map((label) => (
+                  <option key={label.id} value={label.id}>
+                    {label.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="submit"
+                className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:border-[#ff6b4a] hover:text-white"
+              >
+                Apply
+              </button>
+            </form>
+          )}
+          {data.canCreateLabel && (
+            <form action={boundCreateAndApplyLabel} className="mt-2 flex items-center gap-2">
+              <input
+                type="text"
+                name="name"
+                placeholder="New Label name"
+                required
+                className="rounded-md border border-neutral-700 bg-[#141414] px-2 py-1.5 text-sm text-neutral-200 placeholder:text-neutral-600 focus:border-[#ff6b4a] focus:outline-none"
+              />
+              <button
+                type="submit"
+                className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:border-[#ff6b4a] hover:text-white"
+              >
+                Create &amp; apply
+              </button>
+            </form>
+          )}
+        </div>
+
+        <div className="mt-8">
+          <div className="mb-2 font-mono text-[11px] uppercase tracking-wider text-neutral-500">
+            Custom Fields
+          </div>
+          <div className="flex flex-col gap-3">
+            {data.customFieldDefinitions.map((definition) => (
+              <div key={definition.id} className="flex items-center gap-3">
+                <span className="w-36 flex-shrink-0 text-sm text-neutral-400">{definition.name}</span>
+                {data.canEdit ? (
+                  <form
+                    action={boundSetCustomFieldValue(definition.id)}
+                    className="flex flex-1 items-center gap-2"
+                  >
+                    {definition.type === "DROPDOWN" ? (
+                      <select
+                        name="value"
+                        defaultValue={data.customFieldValues[definition.id] ?? ""}
+                        className="flex-1 rounded-md border border-neutral-700 bg-[#141414] px-2 py-1.5 text-sm text-neutral-200"
+                      >
+                        <option value="">—</option>
+                        {definition.options.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type={definition.type === "DATE" ? "date" : definition.type === "NUMBER" ? "number" : "text"}
+                        name="value"
+                        defaultValue={data.customFieldValues[definition.id] ?? ""}
+                        className="flex-1 rounded-md border border-neutral-700 bg-[#141414] px-2 py-1.5 text-sm text-neutral-200"
+                      />
+                    )}
+                    <button type="submit" className="text-xs text-neutral-500 hover:text-[#ff8a70]">
+                      Save
+                    </button>
+                  </form>
+                ) : (
+                  <span className="text-sm text-neutral-300">
+                    {data.customFieldValues[definition.id] ?? "—"}
+                  </span>
+                )}
+              </div>
+            ))}
+            {data.customFieldDefinitions.length === 0 && (
+              <span className="text-sm text-neutral-600">None defined yet.</span>
+            )}
+          </div>
+          {data.canDefineCustomFields && (
+            <form action={boundDefineCustomField} className="mt-4 flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                name="name"
+                placeholder="New field name"
+                required
+                className="rounded-md border border-neutral-700 bg-[#141414] px-2 py-1.5 text-sm text-neutral-200 placeholder:text-neutral-600 focus:border-[#ff6b4a] focus:outline-none"
+              />
+              <select
+                name="type"
+                defaultValue="TEXT"
+                className="rounded-md border border-neutral-700 bg-[#141414] px-2 py-1.5 text-sm text-neutral-200"
+              >
+                <option value="TEXT">Text</option>
+                <option value="NUMBER">Number</option>
+                <option value="DROPDOWN">Dropdown</option>
+                <option value="DATE">Date</option>
+              </select>
+              <input
+                type="text"
+                name="options"
+                placeholder="Dropdown options, comma-separated"
+                className="rounded-md border border-neutral-700 bg-[#141414] px-2 py-1.5 text-sm text-neutral-200 placeholder:text-neutral-600 focus:border-[#ff6b4a] focus:outline-none"
+              />
+              <button
+                type="submit"
+                className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:border-[#ff6b4a] hover:text-white"
+              >
+                Define field
               </button>
             </form>
           )}

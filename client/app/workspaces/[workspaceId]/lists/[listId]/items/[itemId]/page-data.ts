@@ -1,6 +1,13 @@
-import type { ItemPriority, ItemState, PrismaClient } from "@/generated/prisma/client";
+import type { CustomFieldType, ItemPriority, ItemState, PrismaClient } from "@/generated/prisma/client";
 import { resolveItemAccess } from "@/lib/permissions/item-access";
 import { meetsListAccessLevel } from "@/lib/permissions/list-access";
+
+export type CustomFieldDefinitionSummary = {
+  id: string;
+  name: string;
+  type: CustomFieldType;
+  options: string[];
+};
 
 export type ItemDetailData = {
   itemId: string;
@@ -25,6 +32,20 @@ export type ItemDetailData = {
   // sensible assignee candidate (a UI-level judgment call, not enforced by
   // lib/item/ itself, which doesn't restrict who can be assigned).
   assignableMembers: { userId: string; name: string }[];
+  // Labels currently applied, and the Workspace's remaining Labels not yet
+  // applied (the "apply existing" candidate pool). Applying is gated the
+  // same as canEdit (any List Member); creating a brand-new Label is
+  // gated separately by canCreateLabel (Workspace Owner/Admin) (#34).
+  labels: { id: string; name: string }[];
+  availableLabels: { id: string; name: string }[];
+  canCreateLabel: boolean;
+  // Custom Field definitions on this Item's List, and this Item's current
+  // values keyed by definitionId. Defining a field is Lead/Admin-only
+  // (canDefineCustomFields, same threshold as canEdit); setting a value on
+  // an existing definition is available to any List Member (canEdit).
+  customFieldDefinitions: CustomFieldDefinitionSummary[];
+  customFieldValues: Record<string, string>;
+  canDefineCustomFields: boolean;
 };
 
 // Kept separate from the page component (same rationale as the List page's
@@ -44,6 +65,8 @@ export async function loadItemDetailData(
       assignees: { include: { user: { select: { id: true, name: true } } } },
       parent: { select: { id: true, title: true } },
       children: { select: { id: true, title: true, state: true }, orderBy: { createdAt: "asc" } },
+      labels: { include: { label: { select: { id: true, name: true } } } },
+      customFieldValues: true,
     },
   });
 
@@ -56,14 +79,21 @@ export async function loadItemDetailData(
     return null;
   }
 
-  const [sections, listMembers] = await Promise.all([
+  const [sections, listMembers, workspaceMembership, workspaceLabels, customFieldDefinitions] = await Promise.all([
     database.section.findMany({ where: { listId }, orderBy: { order: "asc" }, select: { id: true, name: true } }),
     database.listMember.findMany({
       where: { listId, role: { in: ["LEAD", "MEMBER"] } },
       include: { user: { select: { id: true, name: true } } },
       orderBy: { createdAt: "asc" },
     }),
+    database.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId, userId } },
+    }),
+    database.label.findMany({ where: { workspaceId }, orderBy: { name: "asc" } }),
+    database.customFieldDefinition.findMany({ where: { listId }, orderBy: { name: "asc" } }),
   ]);
+
+  const appliedLabelIds = new Set(item.labels.map((itemLabel) => itemLabel.labelId));
 
   return {
     itemId: item.id,
@@ -83,5 +113,13 @@ export async function loadItemDetailData(
     canEdit: meetsListAccessLevel(access, "WRITE"),
     sections,
     assignableMembers: listMembers.map((member) => ({ userId: member.userId, name: member.user.name })),
+    labels: item.labels.map((itemLabel) => ({ id: itemLabel.label.id, name: itemLabel.label.name })),
+    availableLabels: workspaceLabels
+      .filter((label) => !appliedLabelIds.has(label.id))
+      .map((label) => ({ id: label.id, name: label.name })),
+    canCreateLabel: workspaceMembership?.role === "OWNER" || workspaceMembership?.role === "ADMIN",
+    customFieldDefinitions,
+    customFieldValues: Object.fromEntries(item.customFieldValues.map((v) => [v.definitionId, v.value])),
+    canDefineCustomFields: meetsListAccessLevel(access, "LEAD"),
   };
 }

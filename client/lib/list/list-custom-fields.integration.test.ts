@@ -1,0 +1,193 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+
+import { createCustomFieldDefinition, updateCustomFieldDefinition } from "./list-custom-fields";
+
+async function run() {
+  if (!process.env.DATABASE_URL) {
+    console.log("list custom fields integration test skipped: DATABASE_URL is not set");
+    return;
+  }
+
+  const [{ PrismaPg }, { PrismaClient }] = await Promise.all([
+    import("@prisma/adapter-pg"),
+    import("@/generated/prisma/client"),
+  ]);
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  });
+
+  const createdUserIds: string[] = [];
+  const createdWorkspaceIds: string[] = [];
+
+  async function createUser(): Promise<string> {
+    const userId = randomUUID();
+    createdUserIds.push(userId);
+    await prisma.user.create({
+      data: { id: userId, name: "Test User", email: `list-cf-${userId}@example.test` },
+    });
+    return userId;
+  }
+
+  async function createWorkspaceWithList(): Promise<{ workspaceId: string; listId: string }> {
+    const workspaceId = randomUUID();
+    const listId = randomUUID();
+    createdWorkspaceIds.push(workspaceId);
+    await prisma.workspace.create({ data: { id: workspaceId, name: "Test Workspace" } });
+    await prisma.list.create({ data: { id: listId, workspaceId, name: "Test List" } });
+    return { workspaceId, listId };
+  }
+
+  async function addWorkspaceMember(
+    workspaceId: string,
+    userId: string,
+    role: "OWNER" | "ADMIN" | "MEMBER" | "VIEWER"
+  ): Promise<void> {
+    await prisma.workspaceMember.create({ data: { id: randomUUID(), workspaceId, userId, role } });
+  }
+
+  async function addListMember(
+    listId: string,
+    userId: string,
+    role: "LEAD" | "MEMBER" | "VIEWER"
+  ): Promise<void> {
+    await prisma.listMember.create({ data: { id: randomUUID(), listId, userId, role } });
+  }
+
+  try {
+    // A List Lead can define a Custom Field.
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const leadId = await createUser();
+      await addWorkspaceMember(workspaceId, leadId, "MEMBER");
+      await addListMember(listId, leadId, "LEAD");
+
+      const result = await createCustomFieldDefinition(prisma, {
+        actorUserId: leadId,
+        listId,
+        name: "Inspection ref",
+        type: "TEXT",
+      });
+      assert.equal(result.status, "created");
+    }
+
+    // A Workspace Admin can also define a Custom Field, without an
+    // explicit List role.
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const adminId = await createUser();
+      await addWorkspaceMember(workspaceId, adminId, "ADMIN");
+
+      const result = await createCustomFieldDefinition(prisma, {
+        actorUserId: adminId,
+        listId,
+        name: "Clearance (mm)",
+        type: "NUMBER",
+      });
+      assert.equal(result.status, "created");
+    }
+
+    // A List Member (not Lead) cannot define a Custom Field.
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const memberId = await createUser();
+      await addWorkspaceMember(workspaceId, memberId, "MEMBER");
+      await addListMember(listId, memberId, "MEMBER");
+
+      const result = await createCustomFieldDefinition(prisma, {
+        actorUserId: memberId,
+        listId,
+        name: "Should not exist",
+        type: "TEXT",
+      });
+      assert.deepEqual(result, { status: "forbidden" });
+      const definitions = await prisma.customFieldDefinition.findMany({ where: { listId } });
+      assert.equal(definitions.length, 0);
+    }
+
+    // A DROPDOWN definition requires at least one option.
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const leadId = await createUser();
+      await addWorkspaceMember(workspaceId, leadId, "MEMBER");
+      await addListMember(listId, leadId, "LEAD");
+
+      const rejected = await createCustomFieldDefinition(prisma, {
+        actorUserId: leadId,
+        listId,
+        name: "Review status",
+        type: "DROPDOWN",
+        options: [],
+      });
+      assert.deepEqual(rejected, { status: "dropdown-requires-options" });
+
+      const accepted = await createCustomFieldDefinition(prisma, {
+        actorUserId: leadId,
+        listId,
+        name: "Review status",
+        type: "DROPDOWN",
+        options: ["Needs revision", "Approved"],
+      });
+      assert.equal(accepted.status, "created");
+    }
+
+    // A List Lead can rename a definition and change its options; a List
+    // Member cannot.
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const leadId = await createUser();
+      await addWorkspaceMember(workspaceId, leadId, "MEMBER");
+      await addListMember(listId, leadId, "LEAD");
+      const created = await createCustomFieldDefinition(prisma, {
+        actorUserId: leadId,
+        listId,
+        name: "Status",
+        type: "DROPDOWN",
+        options: ["Open"],
+      });
+      assert.ok(created.status === "created");
+      const definitionId = created.status === "created" ? created.definitionId : "";
+
+      const renamed = await updateCustomFieldDefinition(prisma, {
+        actorUserId: leadId,
+        definitionId,
+        name: "Review status",
+        options: ["Open", "Closed"],
+      });
+      assert.deepEqual(renamed, { status: "updated" });
+      const definition = await prisma.customFieldDefinition.findUniqueOrThrow({ where: { id: definitionId } });
+      assert.equal(definition.name, "Review status");
+      assert.deepEqual(definition.options, ["Open", "Closed"]);
+
+      const memberId = await createUser();
+      await addWorkspaceMember(workspaceId, memberId, "MEMBER");
+      await addListMember(listId, memberId, "MEMBER");
+      const forbidden = await updateCustomFieldDefinition(prisma, {
+        actorUserId: memberId,
+        definitionId,
+        name: "Nope",
+      });
+      assert.deepEqual(forbidden, { status: "forbidden" });
+    }
+  } finally {
+    const listIds = (
+      await prisma.list.findMany({ where: { workspaceId: { in: createdWorkspaceIds } } })
+    ).map((list) => list.id);
+    await prisma.customFieldDefinition.deleteMany({ where: { listId: { in: listIds } } });
+    await prisma.listMember.deleteMany({ where: { listId: { in: listIds } } });
+    await prisma.list.deleteMany({ where: { id: { in: listIds } } });
+    await prisma.workspaceMember.deleteMany({
+      where: { workspaceId: { in: createdWorkspaceIds } },
+    });
+    await prisma.workspace.deleteMany({ where: { id: { in: createdWorkspaceIds } } });
+    await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+    await prisma.$disconnect();
+  }
+
+  console.log("list custom fields integration test passed");
+}
+
+void run().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});
