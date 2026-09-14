@@ -28,6 +28,7 @@ async function run() {
   const validToken = randomUUID();
   const expiredToken = randomUUID();
   const acceptedToken = randomUUID();
+  const nonInvitableRoleToken = randomUUID();
 
   try {
     await prisma.user.createMany({
@@ -52,7 +53,10 @@ async function run() {
       ],
     });
     await prisma.workspace.create({
-      data: { id: workspaceId, name: "Launch Team", ownerId },
+      data: { id: workspaceId, name: "Launch Team" },
+    });
+    await prisma.workspaceMember.create({
+      data: { id: randomUUID(), workspaceId, userId: ownerId, role: "OWNER" },
     });
     await prisma.workspaceInvitation.createMany({
       data: [
@@ -60,6 +64,7 @@ async function run() {
           id: randomUUID(),
           workspaceId,
           email: inviteeEmail,
+          role: "VIEWER",
           token: validToken,
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         },
@@ -78,6 +83,14 @@ async function run() {
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
           acceptedAt: new Date(),
         },
+        {
+          id: randomUUID(),
+          workspaceId,
+          email: inviteeEmail,
+          role: "ADMIN",
+          token: nonInvitableRoleToken,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
       ],
     });
 
@@ -91,6 +104,7 @@ async function run() {
       workspaceId,
       workspaceName: "Launch Team",
       email: inviteeEmail,
+      role: "VIEWER",
     });
 
     assert.equal(
@@ -104,6 +118,24 @@ async function run() {
       "an already-accepted invitation must not resolve"
     );
     assert.equal(await resolveInvitation(prisma, "not-a-real-token"), null);
+
+    await assert.rejects(
+      () => resolveInvitation(prisma, nonInvitableRoleToken),
+      /may only grant MEMBER or VIEWER/,
+      "a corrupted ADMIN-role invitation must never resolve as invitable"
+    );
+    await assert.rejects(
+      () => acceptInvitation(prisma, nonInvitableRoleToken, inviteeId, inviteeEmail),
+      /may only grant MEMBER or VIEWER/,
+      "accepting a corrupted ADMIN-role invitation must never grant membership"
+    );
+    assert.equal(
+      await prisma.workspaceMember.findUnique({
+        where: { workspaceId_userId: { workspaceId, userId: inviteeId } },
+      }),
+      null,
+      "a rejected ADMIN-role invitation must not create a membership"
+    );
 
     const mismatchResult = await acceptInvitation(
       prisma,
@@ -132,7 +164,11 @@ async function run() {
       where: { workspaceId_userId: { workspaceId, userId: inviteeId } },
     });
     assert.ok(membership, "accepting must create a Workspace membership");
-    assert.equal(membership?.role, "member");
+    assert.equal(
+      membership?.role,
+      "VIEWER",
+      "the accepted membership's role must match the invitation's role"
+    );
 
     const invitationRow = await prisma.workspaceInvitation.findUnique({
       where: { token: validToken },

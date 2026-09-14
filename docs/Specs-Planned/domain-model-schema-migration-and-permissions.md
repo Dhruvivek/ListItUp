@@ -79,5 +79,5 @@ Scope: the Workspace/List/Item schema skeleton (enough fields for later specs to
 ## Further Notes
 
 - This spec must ship before the List & Item Core spec, which builds Server Actions and UI directly on the schema and `lib/permissions/` seam defined here. The Home/Profile/Updates/My Tasks spec and the Reports & Analytics spec both depend transitively on List & Item Core.
-- The exact outgoing-Owner target role on ownership transfer (`ADMIN` by default, per Testing Decisions) is a reasonable default inferred from ADR 0009 but was not explicitly settled in any QnA session; flag it for confirmation during implementation rather than treating it as a settled decision with the same weight as the rest of this spec.
+- The exact outgoing-Owner target role on ownership transfer (`ADMIN` by default, per Testing Decisions) is a reasonable default inferred from ADR 0009 and was confirmed by the repo owner during implementation of issue #20 (2026-09-14).
 - "Items I've Assigned" (used by the Home spec) and any cross-Workspace My Tasks query rely on the Assignee join table and `lib/permissions/` being correct across Workspace boundaries — this spec's tests should include at least one multi-Workspace scenario to de-risk that later dependency.

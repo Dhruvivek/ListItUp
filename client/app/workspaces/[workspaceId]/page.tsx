@@ -19,14 +19,12 @@ export default async function WorkspacePage({
     },
     include: { workspace: true },
   });
-  const isOwner = await prisma.workspace.findUnique({
-    where: { id: workspaceId, ownerId: session.user.id },
-  });
-  const workspace = membership?.workspace ?? isOwner;
 
-  if (!workspace) {
+  if (!membership) {
     notFound();
   }
+
+  const workspace = membership.workspace;
 
   return (
     <main className="min-h-screen bg-[#080808] px-6 py-12 text-neutral-300">

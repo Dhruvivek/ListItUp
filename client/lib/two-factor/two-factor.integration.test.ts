@@ -388,7 +388,7 @@ async function run() {
       where: { user: { email: { in: testEmails } } },
     });
     await prisma.workspace.deleteMany({
-      where: { owner: { email: { in: testEmails } } },
+      where: { members: { some: { user: { email: { in: testEmails } } } } },
     });
     await prisma.user.deleteMany({ where: { email: { in: testEmails } } });
     await prisma.verificationEmailThrottle.deleteMany({

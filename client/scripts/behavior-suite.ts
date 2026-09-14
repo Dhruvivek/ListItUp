@@ -18,6 +18,7 @@ const TEST_FILES = [
   "lib/auth/auth-email-request-limits.integration.test.ts",
   "lib/auth/auth-email-delivery-failure.integration.test.ts",
   "lib/workspace/workspace-provisioning.test.ts",
+  "lib/workspace/workspace-ownership.test.ts",
   "lib/auth/magic-link-tokens.test.ts",
   "lib/auth/password-reset-tokens.test.ts",
   "lib/session/callback-url.test.ts",

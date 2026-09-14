@@ -94,7 +94,9 @@ async function run() {
       "password reset must report delivery failure so the User can retry"
     );
   } finally {
-    await prisma.workspace.deleteMany({ where: { owner: { email } } });
+    await prisma.workspace.deleteMany({
+      where: { members: { some: { user: { email } } } },
+    });
     await prisma.user.deleteMany({ where: { email } });
     await prisma.verificationEmailThrottle.deleteMany({
       where: { identifier: email },

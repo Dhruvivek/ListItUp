@@ -18,7 +18,6 @@ model User {
   updatedAt        DateTime          @updatedAt
   sessions         Session[]
   accounts         Account[]
-  workspaces       Workspace[]
   twoFactor        TwoFactor[]
   workspaceMembers WorkspaceMember[]
   platformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentUser")
@@ -77,29 +76,43 @@ model Verification {
   @@map("verification")
 }
 
+// SHARED is a multi-User Workspace; PERSONAL is a User's single-member
+// Personal Space, provisioned automatically on first verified sign-in.
+// Both share this table so List/Item modeling doesn't fork, but product
+// surfaces must never expose a Personal Space as a Workspace (CONTEXT.md).
+enum WorkspaceKind {
+  SHARED
+  PERSONAL
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
 model Workspace {
   id          String                @id
   name        String
-  ownerId     String
+  kind        WorkspaceKind         @default(SHARED)
   createdAt   DateTime              @default(now())
   updatedAt   DateTime              @updatedAt
-  owner       User                  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   lists       List[]
   members     WorkspaceMember[]
   invitations WorkspaceInvitation[]
 
-  @@unique([ownerId])
   @@map("workspace")
 }
 
 model WorkspaceMember {
-  id          String    @id
+  id          String        @id
   workspaceId String
   userId      String
-  role        String    @default("member")
-  createdAt   DateTime  @default(now())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        WorkspaceRole @default(MEMBER)
+  createdAt   DateTime      @default(now())
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, userId])
   @@index([userId])
@@ -107,14 +120,17 @@ model WorkspaceMember {
 }
 
 model WorkspaceInvitation {
-  id          String    @id
+  id          String        @id
   workspaceId String
   email       String
-  token       String    @unique
+  // Only MEMBER or VIEWER are valid invite-time grants; ADMIN/OWNER are
+  // never assigned via invitation (see docs/Specs-Planned domain model spec).
+  role        WorkspaceRole @default(MEMBER)
+  token       String        @unique
   expiresAt   DateTime
   acceptedAt  DateTime?
-  createdAt   DateTime  @default(now())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([email])
   @@map("workspace_invitation")
