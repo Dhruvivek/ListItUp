@@ -18,7 +18,7 @@ test("a new User signs up from an invitation link and lands in the invited Works
 }) => {
   test.setTimeout(60_000);
 
-  const prisma = createTestPrismaClient();
+  const prisma = await createTestPrismaClient();
   const user = uniqueTestUser("invitee-new");
   let seed: SeededInvitation | undefined;
 
@@ -76,7 +76,7 @@ test("an existing signed-out User accepting an invitation is routed through sign
 }) => {
   test.setTimeout(60_000);
 
-  const prisma = createTestPrismaClient();
+  const prisma = await createTestPrismaClient();
   const user = uniqueTestUser("invitee-existing");
   let seed: SeededInvitation | undefined;
 

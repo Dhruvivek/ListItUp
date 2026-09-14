@@ -1,16 +1,19 @@
 import { randomUUID } from "node:crypto";
 
-import { PrismaPg } from "@prisma/adapter-pg";
-
-import { PrismaClient } from "../../generated/prisma/client";
+import type { PrismaClient as GeneratedPrismaClient } from "../../generated/prisma/client";
 
 const INVITATION_EXPIRES_IN_MS = 7 * 24 * 60 * 60 * 1000;
+
+export type TestPrismaClient = GeneratedPrismaClient;
 
 // There is no in-app UI to create a workspace invitation yet (see #10 —
 // only acceptance has shipped), so browser journeys that start from an
 // invitation link must seed one directly, the same way the workspace
-// invitation integration tests do.
-export function createTestPrismaClient(): PrismaClient {
+// invitation integration tests do. The generated Prisma client is ESM-only
+// (it uses import.meta), which breaks under Playwright's CJS test loader
+// on a static import — load it dynamically instead, matching how the
+// *.integration.test.ts files already do this.
+export async function createTestPrismaClient(): Promise<TestPrismaClient> {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     throw new Error(
@@ -18,9 +21,12 @@ export function createTestPrismaClient(): PrismaClient {
     );
   }
 
-  return new PrismaClient({
-    adapter: new PrismaPg({ connectionString: databaseUrl }),
-  });
+  const [{ PrismaPg }, { PrismaClient }] = await Promise.all([
+    import("@prisma/adapter-pg"),
+    import("../../generated/prisma/client"),
+  ]);
+
+  return new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) });
 }
 
 export interface SeededInvitation {
@@ -31,7 +37,7 @@ export interface SeededInvitation {
 }
 
 export async function seedWorkspaceInvitation(
-  prisma: PrismaClient,
+  prisma: TestPrismaClient,
   email: string,
   role: "MEMBER" | "VIEWER" = "MEMBER"
 ): Promise<SeededInvitation> {
@@ -68,7 +74,7 @@ export async function seedWorkspaceInvitation(
 }
 
 export async function cleanupSeededInvitation(
-  prisma: PrismaClient,
+  prisma: TestPrismaClient,
   seed: SeededInvitation,
   invitedUserEmails: string[]
 ): Promise<void> {
