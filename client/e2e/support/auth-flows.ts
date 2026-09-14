@@ -47,11 +47,13 @@ export async function signUpAndVerify(
   await verifyViaMailpit(page, user.email);
 }
 
+// Assumes the page is already on /sign-in (with whatever callbackURL query
+// param it needs) — this only fills and submits, so it doesn't clobber that
+// query param with a fresh, param-less navigation.
 export async function signInWithPassword(
   page: Page,
   user: Pick<TestUser, "email" | "password">
 ): Promise<void> {
-  await page.goto("/sign-in");
   await page.getByLabel("Email").fill(user.email);
   await page.getByRole("textbox", { name: "Password" }).fill(user.password);
   await page.getByRole("button", { name: "Sign in" }).click();

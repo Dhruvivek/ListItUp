@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { uniqueTestUser } from "./support/auth-flows";
+import { pageAlert } from "./support/locators";
 import { waitForMailpitLink } from "./support/mailpit";
 
 // This spec runs under the "chromium-smtp-failure" project (see
@@ -31,7 +32,7 @@ test("a User is told to retry when the password reset email cannot be delivered"
   await page.goto("/forgot-password");
   await page.getByLabel("Email").fill(user.email);
   await page.getByRole("button", { name: "Send reset link" }).click();
-  await expect(page.getByRole("alert")).toContainText(
+  await expect(pageAlert(page)).toContainText(
     "We couldn't send that email. Please try again."
   );
 });

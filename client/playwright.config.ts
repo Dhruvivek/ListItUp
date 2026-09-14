@@ -12,7 +12,8 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   timeout: 60_000,
-  use: { baseURL, trace: "retain-on-failure" },
+  reporter: [["list"], ["html", { open: "never" }]],
+  use: { baseURL, trace: "retain-on-failure", screenshot: "only-on-failure" },
   webServer: [
     {
       command: "pnpm dev -p 4173",
