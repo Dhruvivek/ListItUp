@@ -6,10 +6,12 @@ import { requireAuthenticatedSession } from "@/lib/session/require-authenticated
 import {
   addChildItemAction,
   addItemAssigneeAction,
+  addItemDependencyAction,
   applyExistingLabelAction,
   createAndApplyLabelAction,
   defineCustomFieldAction,
   removeItemAssigneeAction,
+  removeItemDependencyAction,
   removeItemLabelAction,
   setItemCustomFieldValueAction,
   transitionItemStateAction,
@@ -53,6 +55,9 @@ export default async function ItemDetailPage({ params }: Props) {
   const boundSetCustomFieldValue = (definitionId: string) =>
     setItemCustomFieldValueAction.bind(null, workspaceId, listId, itemId, definitionId);
   const boundDefineCustomField = defineCustomFieldAction.bind(null, workspaceId, listId, itemId);
+  const boundAddDependency = addItemDependencyAction.bind(null, workspaceId, listId, itemId);
+  const boundRemoveDependency = (blockerId: string, blockedId: string) =>
+    removeItemDependencyAction.bind(null, workspaceId, listId, itemId, blockerId, blockedId);
 
   const unassignedMembers = data.assignableMembers.filter(
     (member) => !data.assignees.some((assignee) => assignee.userId === member.userId)
@@ -370,6 +375,106 @@ export default async function ItemDetailPage({ params }: Props) {
                 className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:border-[#ff6b4a] hover:text-white"
               >
                 Define field
+              </button>
+            </form>
+          )}
+        </div>
+
+        <div className="mt-8">
+          <div className="mb-2 font-mono text-[11px] uppercase tracking-wider text-neutral-500">
+            Dependencies
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <div>
+              <div className="text-xs text-neutral-500">Is blocked by</div>
+              <ul className="mt-1 flex flex-col gap-1">
+                {data.blockedBy.map((blocker) => (
+                  <li key={blocker.id} className="flex items-center justify-between text-sm">
+                    <a
+                      href={`/workspaces/${workspaceId}/lists/${blocker.listId}/items/${blocker.id}`}
+                      className="text-neutral-300 hover:text-white hover:underline"
+                    >
+                      ← {blocker.title}
+                    </a>
+                    {data.canEdit && (
+                      <form action={boundRemoveDependency(blocker.id, data.itemId)}>
+                        <button type="submit" className="text-xs text-neutral-600 hover:text-[#ff8a70]">
+                          Remove
+                        </button>
+                      </form>
+                    )}
+                  </li>
+                ))}
+                {data.blockedBy.length === 0 && <li className="text-sm text-neutral-600">None.</li>}
+              </ul>
+            </div>
+
+            <div>
+              <div className="text-xs text-neutral-500">Blocks</div>
+              <ul className="mt-1 flex flex-col gap-1">
+                {data.blocking.map((blocked) => (
+                  <li key={blocked.id} className="flex items-center justify-between text-sm">
+                    <a
+                      href={`/workspaces/${workspaceId}/lists/${blocked.listId}/items/${blocked.id}`}
+                      className="text-neutral-300 hover:text-white hover:underline"
+                    >
+                      → {blocked.title}
+                    </a>
+                    {data.canEdit && (
+                      <form action={boundRemoveDependency(data.itemId, blocked.id)}>
+                        <button type="submit" className="text-xs text-neutral-600 hover:text-[#ff8a70]">
+                          Remove
+                        </button>
+                      </form>
+                    )}
+                  </li>
+                ))}
+                {data.blocking.length === 0 && <li className="text-sm text-neutral-600">None.</li>}
+              </ul>
+            </div>
+          </div>
+
+          {data.canEdit && (
+            <form action={boundAddDependency} className="mt-3 flex flex-wrap items-center gap-2">
+              <select
+                name="direction"
+                defaultValue="blockedBy"
+                className="rounded-md border border-neutral-700 bg-[#141414] px-2 py-1.5 text-sm text-neutral-200"
+              >
+                <option value="blockedBy">Is blocked by…</option>
+                <option value="blocks">Blocks…</option>
+              </select>
+              {data.sameListItems.length > 0 ? (
+                <select
+                  name="targetItemId"
+                  required
+                  defaultValue=""
+                  className="rounded-md border border-neutral-700 bg-[#141414] px-2 py-1.5 text-sm text-neutral-200"
+                >
+                  <option value="" disabled>
+                    Choose an Item in this List…
+                  </option>
+                  {data.sameListItems.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.title}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  name="targetItemId"
+                  placeholder="Item ID (works across Lists too)"
+                  required
+                  className="rounded-md border border-neutral-700 bg-[#141414] px-2 py-1.5 text-sm text-neutral-200 placeholder:text-neutral-600 focus:border-[#ff6b4a] focus:outline-none"
+                />
+              )}
+              <button
+                type="submit"
+                className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:border-[#ff6b4a] hover:text-white"
+              >
+                Link
               </button>
             </form>
           )}

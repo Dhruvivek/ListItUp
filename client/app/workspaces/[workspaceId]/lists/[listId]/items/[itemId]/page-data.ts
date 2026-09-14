@@ -46,6 +46,16 @@ export type ItemDetailData = {
   customFieldDefinitions: CustomFieldDefinitionSummary[];
   customFieldValues: Record<string, string>;
   canDefineCustomFields: boolean;
+  // Dependencies (#35) — purely informational, cross-List. "blocking" is
+  // what this Item blocks; "blockedBy" is what blocks this Item.
+  blocking: { id: string; title: string; listId: string }[];
+  blockedBy: { id: string; title: string; listId: string }[];
+  // Other Items in this same List, excluding ones already linked in
+  // either direction — the "add a Dependency" candidate pool for the
+  // common case. Cross-List linking still works via the lib/item/
+  // functions themselves; this UI list just doesn't offer a cross-List
+  // picker yet.
+  sameListItems: { id: string; title: string }[];
 };
 
 // Kept separate from the page component (same rationale as the List page's
@@ -67,6 +77,8 @@ export async function loadItemDetailData(
       children: { select: { id: true, title: true, state: true }, orderBy: { createdAt: "asc" } },
       labels: { include: { label: { select: { id: true, name: true } } } },
       customFieldValues: true,
+      blocking: { include: { blocked: { select: { id: true, title: true, listId: true } } } },
+      blockedBy: { include: { blocker: { select: { id: true, title: true, listId: true } } } },
     },
   });
 
@@ -79,7 +91,8 @@ export async function loadItemDetailData(
     return null;
   }
 
-  const [sections, listMembers, workspaceMembership, workspaceLabels, customFieldDefinitions] = await Promise.all([
+  const [sections, listMembers, workspaceMembership, workspaceLabels, customFieldDefinitions, otherListItems] =
+    await Promise.all([
     database.section.findMany({ where: { listId }, orderBy: { order: "asc" }, select: { id: true, name: true } }),
     database.listMember.findMany({
       where: { listId, role: { in: ["LEAD", "MEMBER"] } },
@@ -91,9 +104,18 @@ export async function loadItemDetailData(
     }),
     database.label.findMany({ where: { workspaceId }, orderBy: { name: "asc" } }),
     database.customFieldDefinition.findMany({ where: { listId }, orderBy: { name: "asc" } }),
+    database.item.findMany({
+      where: { listId, id: { not: itemId } },
+      select: { id: true, title: true },
+      orderBy: { createdAt: "asc" },
+    }),
   ]);
 
   const appliedLabelIds = new Set(item.labels.map((itemLabel) => itemLabel.labelId));
+  const linkedItemIds = new Set([
+    ...item.blocking.map((dependency) => dependency.blocked.id),
+    ...item.blockedBy.map((dependency) => dependency.blocker.id),
+  ]);
 
   return {
     itemId: item.id,
@@ -121,5 +143,8 @@ export async function loadItemDetailData(
     customFieldDefinitions,
     customFieldValues: Object.fromEntries(item.customFieldValues.map((v) => [v.definitionId, v.value])),
     canDefineCustomFields: meetsListAccessLevel(access, "LEAD"),
+    blocking: item.blocking.map((dependency) => dependency.blocked),
+    blockedBy: item.blockedBy.map((dependency) => dependency.blocker),
+    sameListItems: otherListItems.filter((candidate) => !linkedItemIds.has(candidate.id)),
   };
 }

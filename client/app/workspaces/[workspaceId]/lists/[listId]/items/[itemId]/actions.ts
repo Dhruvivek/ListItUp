@@ -6,6 +6,7 @@ import type { ItemPriority, ItemState } from "@/generated/prisma/client";
 import { addAssignee, removeAssignee } from "@/lib/item/item-assignment";
 import { setCustomFieldValue } from "@/lib/item/item-custom-fields";
 import { createItem } from "@/lib/item/item-creation";
+import { createDependency, removeDependency } from "@/lib/item/item-dependencies";
 import { isValidItemState, transitionItemState, updateItem } from "@/lib/item/item-lifecycle";
 import { applyLabel, removeLabel } from "@/lib/item/item-labels";
 import { createCustomFieldDefinition } from "@/lib/list/list-custom-fields";
@@ -198,5 +199,38 @@ export async function defineCustomFieldAction(
   }
 
   await createCustomFieldDefinition(prisma, { actorUserId: session.user.id, listId, name, type, options });
+  revalidatePath(itemPath(workspaceId, listId, itemId));
+}
+
+// direction "blocks" means this Item blocks the target; "blockedBy" means
+// this Item is blocked by the target (#35).
+export async function addItemDependencyAction(
+  workspaceId: string,
+  listId: string,
+  itemId: string,
+  formData: FormData
+): Promise<void> {
+  const session = await requireAuthenticatedSession(itemPath(workspaceId, listId, itemId));
+  const targetItemId = String(formData.get("targetItemId") ?? "").trim();
+  const direction = String(formData.get("direction") ?? "");
+
+  if (!targetItemId || (direction !== "blocks" && direction !== "blockedBy")) {
+    return;
+  }
+
+  const [blockerId, blockedId] = direction === "blocks" ? [itemId, targetItemId] : [targetItemId, itemId];
+  await createDependency(prisma, { actorUserId: session.user.id, blockerId, blockedId });
+  revalidatePath(itemPath(workspaceId, listId, itemId));
+}
+
+export async function removeItemDependencyAction(
+  workspaceId: string,
+  listId: string,
+  itemId: string,
+  blockerId: string,
+  blockedId: string
+): Promise<void> {
+  const session = await requireAuthenticatedSession(itemPath(workspaceId, listId, itemId));
+  await removeDependency(prisma, { actorUserId: session.user.id, blockerId, blockedId });
   revalidatePath(itemPath(workspaceId, listId, itemId));
 }

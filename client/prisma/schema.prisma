@@ -298,6 +298,10 @@ model Item {
   assignees ItemAssignee[]
   labels    ItemLabel[]
   customFieldValues CustomFieldValue[]
+  // Dependencies where this Item is the blocker/blocked side, respectively
+  // (#35).
+  blocking  ItemDependency[] @relation("DependencyBlocker")
+  blockedBy ItemDependency[] @relation("DependencyBlocked")
 
   @@index([listId])
   @@index([sectionId])
@@ -390,6 +394,22 @@ model CustomFieldValue {
   @@unique([itemId, definitionId])
   @@index([definitionId])
   @@map("custom_field_value")
+}
+
+// A directed link between two Items, including across different Lists —
+// purely informational, never changes either Item's lifecycle state
+// (#35). blocker "blocks" blocked; blocked "is blocked by" blocker.
+model ItemDependency {
+  id        String   @id
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+  blocker   Item     @relation("DependencyBlocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   Item     @relation("DependencyBlocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+  @@map("item_dependency")
 }
 
 // Better Auth's email-verification tokens are stateless signed JWTs and are

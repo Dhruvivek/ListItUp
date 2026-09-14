@@ -221,6 +221,56 @@ async function run() {
       assert.equal(adminData!.canCreateLabel, true);
       assert.equal(adminData!.canDefineCustomFields, true);
     }
+
+    // Dependencies render in both directions, including across Lists, and
+    // sameListItems excludes Items already linked (#35).
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const memberId = await createUser();
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: memberId, role: "MEMBER" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: memberId, role: "MEMBER" },
+      });
+      const item = await prisma.item.create({
+        data: { id: randomUUID(), listId, title: "Middle Item", creatorId: memberId },
+      });
+      const upstream = await prisma.item.create({
+        data: { id: randomUUID(), listId, title: "Upstream blocker", creatorId: memberId },
+      });
+      const otherListId = randomUUID();
+      const otherWorkspaceId = randomUUID();
+      await prisma.workspace.create({ data: { id: otherWorkspaceId, name: "Other Workspace" } });
+      await prisma.list.create({ data: { id: otherListId, workspaceId: otherWorkspaceId, name: "Other List" } });
+      const downstream = await prisma.item.create({
+        data: { id: randomUUID(), listId: otherListId, title: "Downstream, cross-List", creatorId: memberId },
+      });
+      const unrelated = await prisma.item.create({
+        data: { id: randomUUID(), listId, title: "Unrelated", creatorId: memberId },
+      });
+
+      await prisma.itemDependency.create({
+        data: { id: randomUUID(), blockerId: upstream.id, blockedId: item.id },
+      });
+      await prisma.itemDependency.create({
+        data: { id: randomUUID(), blockerId: item.id, blockedId: downstream.id },
+      });
+
+      const data = await loadItemDetailData(prisma, { userId: memberId, workspaceId, listId, itemId: item.id });
+
+      assert.ok(data);
+      assert.deepEqual(data!.blockedBy.map((d) => d.title), ["Upstream blocker"]);
+      assert.deepEqual(data!.blocking.map((d) => d.title), ["Downstream, cross-List"]);
+      assert.equal(data!.blocking[0].listId, otherListId, "cross-List Dependencies keep their own listId");
+      assert.deepEqual(
+        data!.sameListItems,
+        [{ id: unrelated.id, title: "Unrelated" }],
+        "already-linked Items are excluded from the same-List candidate pool"
+      );
+
+      await prisma.workspace.deleteMany({ where: { id: otherWorkspaceId } });
+    }
   } finally {
     const listIds = (
       await prisma.list.findMany({ where: { workspaceId: { in: createdWorkspaceIds } } })
