@@ -20,6 +20,9 @@ model User {
   accounts         Account[]
   twoFactor        TwoFactor[]
   workspaceMembers WorkspaceMember[]
+  listMembers      ListMember[]
+  guestAccess      Guest[]
+  starredLists     Starred[]
   platformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentUser")
   grantedPlatformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentGranter")
   revokedPlatformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentRevoker")
@@ -136,17 +139,99 @@ model WorkspaceInvitation {
   @@map("workspace_invitation")
 }
 
+// A List's role ladder is independent of WorkspaceRole (ADR 0009): a
+// ListMember row may only reference a User who already holds a
+// Workspace-level membership in that List's Workspace — enforced at the
+// application layer in lib/list/, since Guest (below) is the only path to
+// List access without one.
+enum ListMemberRole {
+  LEAD
+  MEMBER
+  VIEWER
+}
+
+enum ListStatus {
+  ON_TRACK
+  ON_HOLD
+  COMPLETED
+  DROPPED
+}
+
 model List {
-  id          String    @id
+  id          String       @id
   workspaceId String
   name        String
-  isInbox     Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  description String?
+  status      ListStatus   @default(ON_TRACK)
+  isInbox     Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members     ListMember[]
+  guests      Guest[]
+  starredBy   Starred[]
+  sections    Section[]
 
   @@index([workspaceId])
   @@map("list")
+}
+
+model ListMember {
+  id        String         @id
+  listId    String
+  userId    String
+  role      ListMemberRole @default(MEMBER)
+  createdAt DateTime       @default(now())
+  list      List           @relation(fields: [listId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, userId])
+  @@index([userId])
+  @@map("list_member")
+}
+
+// Read-only access to exactly the List(s) it names, without requiring any
+// Workspace-level membership row (unlike ListMember above) — see CONTEXT.md
+// Guest and ADR 0009.
+model Guest {
+  id        String   @id
+  listId    String
+  userId    String
+  createdAt DateTime @default(now())
+  list      List     @relation(fields: [listId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, userId])
+  @@index([userId])
+  @@map("guest")
+}
+
+// A per-User-per-List flag (CONTEXT.md Starred), not a boolean column on
+// List, since it varies by the viewing User.
+model Starred {
+  id        String   @id
+  listId    String
+  userId    String
+  createdAt DateTime @default(now())
+  list      List     @relation(fields: [listId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, listId])
+  @@index([listId])
+  @@map("starred")
+}
+
+model Section {
+  id        String   @id
+  listId    String
+  name      String
+  order     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  list      List     @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@index([listId])
+  @@map("section")
 }
 
 // Better Auth's email-verification tokens are stateless signed JWTs and are
