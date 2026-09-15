@@ -1,4 +1,5 @@
 import type { ItemPriority, ItemState, PrismaClient } from "@/generated/prisma/client";
+import { notifyItemStateChanged } from "@/lib/notification/notification-triggers";
 import { resolveItemAccess } from "@/lib/permissions/item-access";
 import { meetsListAccessLevel } from "@/lib/permissions/list-access";
 
@@ -97,6 +98,7 @@ export async function transitionItemState(
     where: { id: itemId },
     data: { state, blockerReason: state === "BLOCKED" ? blockerReason!.trim() : null },
   });
+  await notifyItemStateChanged(database, { actorUserId, itemId });
 
   return { status: "transitioned" };
 }
