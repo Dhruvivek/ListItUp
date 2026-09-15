@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronRight, ChevronsUpDown } from "lucide-react";
+import { Bell, ChevronDown, ChevronRight, ChevronsUpDown } from "lucide-react";
 
 import type { WorkspaceNavEntry } from "@/app/workspaces/[workspaceId]/layout-data";
 
@@ -11,6 +11,7 @@ type WorkspaceSidebarProps = {
   currentWorkspaceName: string;
   switchableWorkspaces: WorkspaceNavEntry[];
   personalSpace: WorkspaceNavEntry | null;
+  unreadNotificationCount: number;
 };
 
 export function WorkspaceSidebar({
@@ -18,12 +19,29 @@ export function WorkspaceSidebar({
   currentWorkspaceName,
   switchableWorkspaces,
   personalSpace,
+  unreadNotificationCount,
 }: WorkspaceSidebarProps) {
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const [isPersonalSpaceOpen, setIsPersonalSpaceOpen] = useState(false);
 
   return (
     <aside className="flex w-64 flex-shrink-0 flex-col gap-1 border-r border-neutral-800 bg-[#0d0d0d] p-3">
+      <Link
+        href="/updates"
+        className="mb-2 flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-neutral-300 hover:bg-[#141414] hover:text-white"
+      >
+        <Bell className="h-4 w-4 flex-shrink-0 text-neutral-500" strokeWidth={1.7} aria-hidden="true" />
+        <span className="flex-1">Updates</span>
+        {unreadNotificationCount > 0 && (
+          <span
+            aria-label={`${unreadNotificationCount} unread notifications`}
+            className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#ff6b4a] px-1 text-[11px] font-medium text-[#1a0a05]"
+          >
+            {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+          </span>
+        )}
+      </Link>
+
       <div className="relative">
         <button
           type="button"

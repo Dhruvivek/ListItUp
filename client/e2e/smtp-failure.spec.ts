@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./support/fixtures";
 
 import { uniqueTestUser } from "./support/auth-flows";
 import { pageAlert } from "./support/locators";

@@ -64,8 +64,9 @@ async function run() {
 
       const data = await loadMyTasksPageData(prisma, { userId });
 
-      assert.equal(data.items.length, 1);
-      assert.equal(data.items[0].title, "Campaign brief");
+      assert.equal(data.groups.length, 1, "ungrouped by default: a single unlabeled group");
+      assert.equal(data.groups[0].items.length, 1);
+      assert.equal(data.groups[0].items[0].title, "Campaign brief");
       assert.equal(data.selectedWorkspaceId, null);
       assert.equal(data.includeCompleted, false);
       assert.equal(data.includeArchived, false);
@@ -96,7 +97,119 @@ async function run() {
       const data = await loadMyTasksPageData(prisma, { userId, sourceWorkspaceId: workspaceA.workspaceId });
 
       assert.equal(data.selectedWorkspaceId, workspaceA.workspaceId);
-      assert.deepEqual(data.items.map((item) => item.title), ["A task"]);
+      assert.deepEqual(data.groups[0].items.map((item) => item.title), ["A task"]);
+    }
+
+    // Search and Group threading (#44): a text query narrows the unified
+    // set, and grouping arranges it without dropping or duplicating Items.
+    {
+      const userId = await createUser();
+      const workspaceA = await createWorkspaceWithList("Marketing");
+      await joinWorkspace(workspaceA.workspaceId, workspaceA.listId, userId);
+      const personal = await createWorkspaceWithList("Personal Space", "PERSONAL");
+      await joinWorkspace(personal.workspaceId, personal.listId, userId);
+
+      const matchItem = await prisma.item.create({
+        data: { id: randomUUID(), listId: workspaceA.listId, creatorId: userId, title: "Fix platform signage" },
+      });
+      await prisma.itemAssignee.create({ data: { id: randomUUID(), itemId: matchItem.id, userId } });
+      const otherItem = await prisma.item.create({
+        data: { id: randomUUID(), listId: personal.listId, creatorId: userId, title: "Buy groceries" },
+      });
+      await prisma.itemAssignee.create({ data: { id: randomUUID(), itemId: otherItem.id, userId } });
+
+      const searched = await loadMyTasksPageData(prisma, { userId, search: "signage" });
+      assert.deepEqual(searched.groups[0].items.map((item) => item.title), ["Fix platform signage"]);
+      assert.equal(searched.search, "signage");
+
+      const grouped = await loadMyTasksPageData(prisma, { userId, groupBy: "WORKSPACE" });
+      assert.equal(grouped.groupBy, "WORKSPACE");
+      const totalGroupedItems = grouped.groups.reduce((sum, group) => sum + group.items.length, 0);
+      assert.equal(totalGroupedItems, 2, "grouping must not drop or duplicate Items");
+    }
+
+    // Board/Calendar/Files (#43) all read the same effective-access Item
+    // set as the List view, computed once in loadMyTasksPageData.
+    {
+      const userId = await createUser();
+      const workspaceA = await createWorkspaceWithList("Marketing");
+      await joinWorkspace(workspaceA.workspaceId, workspaceA.listId, userId);
+      const personal = await createWorkspaceWithList("Personal Space", "PERSONAL");
+      await joinWorkspace(personal.workspaceId, personal.listId, userId);
+
+      const highTodo = await prisma.item.create({
+        data: {
+          id: randomUUID(),
+          listId: workspaceA.listId,
+          creatorId: userId,
+          title: "High priority task",
+          priority: "HIGH",
+          dueDate: new Date("2026-09-20T00:00:00.000Z"),
+        },
+      });
+      await prisma.itemAssignee.create({ data: { id: randomUUID(), itemId: highTodo.id, userId } });
+      await prisma.attachment.create({
+        data: {
+          id: randomUUID(),
+          itemId: highTodo.id,
+          uploaderId: userId,
+          fileName: "brief.pdf",
+          contentType: "application/pdf",
+          sizeBytes: 1024,
+          storageKey: "key-1",
+        },
+      });
+
+      const blockedPersonal = await prisma.item.create({
+        data: {
+          id: randomUUID(),
+          listId: personal.listId,
+          creatorId: userId,
+          title: "Blocked personal task",
+          state: "BLOCKED",
+          blockerReason: "Waiting on approval",
+        },
+      });
+      await prisma.itemAssignee.create({ data: { id: randomUUID(), itemId: blockedPersonal.id, userId } });
+
+      const undated = await prisma.item.create({
+        data: { id: randomUUID(), listId: workspaceA.listId, creatorId: userId, title: "Undated task" },
+      });
+      await prisma.itemAssignee.create({ data: { id: randomUUID(), itemId: undated.id, userId } });
+
+      const now = new Date("2026-09-15T00:00:00.000Z");
+      const data = await loadMyTasksPageData(prisma, { userId, now });
+
+      // Board — default STATE grouping.
+      const toDoColumn = data.boardColumns.find((column) => column.key === "TO_DO")!;
+      assert.deepEqual(
+        toDoColumn.items.map((item) => item.title).sort(),
+        ["High priority task", "Undated task"]
+      );
+      const blockedColumn = data.boardColumns.find((column) => column.key === "BLOCKED")!;
+      assert.deepEqual(blockedColumn.items.map((item) => item.title), ["Blocked personal task"]);
+
+      // Board — grouping is driven by the boardGroupBy input, not persisted.
+      const priorityData = await loadMyTasksPageData(prisma, { userId, now, boardGroupBy: "PRIORITY" });
+      assert.equal(priorityData.boardGroupBy, "PRIORITY");
+      const highColumn = priorityData.boardColumns.find((column) => column.key === "HIGH")!;
+      assert.deepEqual(highColumn.items.map((item) => item.title), ["High priority task"]);
+
+      // Calendar — the dated Item lands on its due-date cell; the undated
+      // Item never appears in any cell.
+      const septemberData = await loadMyTasksPageData(prisma, { userId, now, calendarMonth: "2026-09" });
+      const sep20 = septemberData.calendarCells.find(
+        (cell) => cell.date.toISOString().slice(0, 10) === "2026-09-20"
+      )!;
+      assert.deepEqual(sep20.items.map((item) => item.title), ["High priority task"]);
+      const allCalendarTitles = septemberData.calendarCells.flatMap((cell) => cell.items.map((item) => item.title));
+      assert.equal(allCalendarTitles.includes("Undated task"), false);
+
+      // Files — only the Item carrying an Attachment appears, tagged with
+      // its source Workspace.
+      assert.equal(data.fileEntries.length, 1);
+      assert.equal(data.fileEntries[0].fileName, "brief.pdf");
+      assert.equal(data.fileEntries[0].sourceWorkspaceName, "Marketing");
     }
   } finally {
     const listIds = (

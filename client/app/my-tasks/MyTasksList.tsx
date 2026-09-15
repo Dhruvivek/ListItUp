@@ -1,4 +1,7 @@
-import type { MyTaskItem } from "@/lib/item/item-my-tasks";
+import { buildItemShareUrl } from "@/lib/item/item-sharing";
+import { myTaskItemHref, myTaskWorkspaceLabel, type MyTaskItem, type MyTasksGroup } from "@/lib/item/item-my-tasks";
+
+import { CopyLinkButton } from "./CopyLinkButton";
 
 const STATE_COLOR: Record<MyTaskItem["state"], string> = {
   TO_DO: "#737373",
@@ -21,10 +24,12 @@ function isOverdue(item: MyTaskItem, now: Date): boolean {
 function MyTaskRow({
   item,
   now,
+  baseUrl,
   boundComplete,
 }: {
   item: MyTaskItem;
   now: Date;
+  baseUrl: string;
   boundComplete: () => Promise<void>;
 }) {
   const canComplete = item.state !== "COMPLETE" && item.state !== "ARCHIVED";
@@ -36,15 +41,12 @@ function MyTaskRow({
         className="h-2 w-2 flex-shrink-0 rounded-full"
         style={{ backgroundColor: STATE_COLOR[item.state] }}
       />
-      <a
-        href={`/workspaces/${item.sourceWorkspaceId}/lists/${item.listId}/items/${item.id}`}
-        className="flex-1 truncate text-neutral-200 hover:underline"
-      >
+      <a href={myTaskItemHref(item, item.id)} className="flex-1 truncate text-neutral-200 hover:underline">
         {item.hasParent && <span className="mr-1 text-neutral-600">↳</span>}
         {item.title}
       </a>
       <span className="font-mono text-[10px] uppercase tracking-wider text-neutral-600">
-        {item.sourceWorkspaceKind === "PERSONAL" ? "Personal Space" : item.sourceWorkspaceName}
+        {myTaskWorkspaceLabel(item)}
       </span>
       {item.priority !== "NORMAL" && (
         <span className="font-mono text-[10px] uppercase tracking-wider text-neutral-500">
@@ -57,6 +59,7 @@ function MyTaskRow({
           {new Date(item.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
         </span>
       )}
+      <CopyLinkButton url={buildItemShareUrl(baseUrl, item)} />
       {canComplete && (
         <form action={boundComplete}>
           <button
@@ -72,15 +75,19 @@ function MyTaskRow({
 }
 
 export function MyTasksList({
-  items,
+  groups,
   now,
+  baseUrl,
   boundComplete,
 }: {
-  items: MyTaskItem[];
+  groups: MyTasksGroup<MyTaskItem>[];
   now: Date;
+  baseUrl: string;
   boundComplete: (itemId: string) => () => Promise<void>;
 }) {
-  if (items.length === 0) {
+  const isEmpty = groups.every((group) => group.items.length === 0);
+
+  if (isEmpty) {
     return (
       <div className="mt-6 rounded-lg border border-dashed border-neutral-800 px-4 py-16 text-center text-sm text-neutral-600">
         No Items here — you&apos;re all caught up.
@@ -91,8 +98,23 @@ export function MyTasksList({
   return (
     <div className="mt-6 rounded-lg border border-neutral-800 bg-[#0d0d0d]">
       <div className="px-1 py-1">
-        {items.map((item) => (
-          <MyTaskRow key={item.id} item={item} now={now} boundComplete={boundComplete(item.id)} />
+        {groups.map((group) => (
+          <div key={group.key}>
+            {group.label && (
+              <div className="px-3 pt-4 pb-2 font-mono text-[10.5px] uppercase tracking-wider text-neutral-500">
+                {group.label}
+              </div>
+            )}
+            {group.items.map((item) => (
+              <MyTaskRow
+                key={item.id}
+                item={item}
+                now={now}
+                baseUrl={baseUrl}
+                boundComplete={boundComplete(item.id)}
+              />
+            ))}
+          </div>
         ))}
       </div>
     </div>

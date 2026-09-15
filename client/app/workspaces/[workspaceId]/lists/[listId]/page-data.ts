@@ -8,6 +8,18 @@ import {
   resolveListAccess,
   type ListAccessLevel,
 } from "@/lib/permissions/list-access";
+import {
+  breakdownBySection,
+  breakdownByState,
+  buildCompletionOverTime,
+  computeItemCounts,
+  type CompletionOverTimePoint,
+  type ItemCounts,
+  type SectionBreakdownEntry,
+  type StateBreakdownEntry,
+} from "@/lib/report/list-dashboard";
+
+const COMPLETION_OVER_TIME_DAYS = 14;
 
 export type EligibleWorkspaceMember = { userId: string; name: string };
 
@@ -71,6 +83,15 @@ export type ListPageData = {
   // Files view (#22) — every Attachment across the List's Items, newest
   // first.
   filesViewEntries: FilesViewEntry[];
+  // Dashboard tab's count/breakdown widgets (#51) — computed over the same
+  // active (non-Archived) Items as the rest of the page, not a separate
+  // query.
+  dashboard: {
+    counts: ItemCounts;
+    bySection: SectionBreakdownEntry[];
+    byState: StateBreakdownEntry[];
+    completionOverTime: CompletionOverTimePoint[];
+  };
 };
 
 // Kept separate from the page component (same rationale as the
@@ -79,9 +100,9 @@ export type ListPageData = {
 // while everything testable lives here on an injected PrismaClient.
 export async function loadListPageData(
   database: PrismaClient,
-  input: { userId: string; workspaceId: string; listId: string }
+  input: { userId: string; workspaceId: string; listId: string; now?: Date }
 ): Promise<ListPageData | null> {
-  const { userId, workspaceId, listId } = input;
+  const { userId, workspaceId, listId, now = new Date() } = input;
 
   const list = await database.list.findUnique({ where: { id: listId } });
   if (!list || list.workspaceId !== workspaceId) {
@@ -180,6 +201,22 @@ export async function loadListPageData(
       dueDate: item.dueDate,
     }))
   );
+  const dashboardItems = items.map((item) => ({
+    state: item.state,
+    dueDate: item.dueDate,
+    sectionId: item.sectionId,
+    updatedAt: item.updatedAt,
+  }));
+  const dashboard = {
+    counts: computeItemCounts(dashboardItems, now),
+    bySection: breakdownBySection(
+      dashboardItems,
+      sections.map((section) => ({ id: section.id, name: section.name }))
+    ),
+    byState: breakdownByState(dashboardItems),
+    completionOverTime: buildCompletionOverTime(dashboardItems, now, COMPLETION_OVER_TIME_DAYS),
+  };
+
   const filesViewEntries = buildFilesViewEntries(
     items.map((item) => ({
       id: item.id,
@@ -220,5 +257,6 @@ export async function loadListPageData(
     assignableMembers,
     timelineItems,
     filesViewEntries,
+    dashboard,
   };
 }
