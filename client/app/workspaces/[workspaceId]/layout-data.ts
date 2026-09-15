@@ -1,10 +1,12 @@
 import type { PrismaClient } from "@/generated/prisma/client";
+import { countUnreadNotifications } from "@/lib/notification/notification-inbox";
 
 export type WorkspaceNavEntry = { id: string; name: string };
 
 export type WorkspaceNavData = {
   switchableWorkspaces: WorkspaceNavEntry[];
   personalSpace: WorkspaceNavEntry | null;
+  unreadNotificationCount: number;
 };
 
 // Kept separate from layout.tsx itself, and taking an injected PrismaClient
@@ -16,7 +18,7 @@ export async function loadWorkspaceNavData(
   database: PrismaClient,
   userId: string
 ): Promise<WorkspaceNavData> {
-  const [switchableMemberships, personalMembership] = await Promise.all([
+  const [switchableMemberships, personalMembership, unreadNotificationCount] = await Promise.all([
     database.workspaceMember.findMany({
       where: { userId, workspace: { kind: "SHARED" } },
       include: { workspace: { select: { id: true, name: true } } },
@@ -26,6 +28,7 @@ export async function loadWorkspaceNavData(
       where: { userId, workspace: { kind: "PERSONAL" } },
       include: { workspace: { select: { id: true, name: true } } },
     }),
+    countUnreadNotifications(database, userId),
   ]);
 
   return {
@@ -36,5 +39,6 @@ export async function loadWorkspaceNavData(
     personalSpace: personalMembership
       ? { id: personalMembership.workspace.id, name: personalMembership.workspace.name }
       : null,
+    unreadNotificationCount,
   };
 }

@@ -1,0 +1,98 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+
+import { markNotificationRead } from "@/lib/notification/notification-inbox";
+
+import { loadUpdatesPageData } from "./page-data";
+
+async function run() {
+  if (!process.env.DATABASE_URL) {
+    console.log("Updates page smoke test skipped: DATABASE_URL is not set");
+    return;
+  }
+
+  const [{ PrismaPg }, { PrismaClient }] = await Promise.all([
+    import("@prisma/adapter-pg"),
+    import("@/generated/prisma/client"),
+  ]);
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  });
+
+  const createdUserIds: string[] = [];
+  const createdWorkspaceIds: string[] = [];
+
+  async function createUser(name = "Test User"): Promise<string> {
+    const userId = randomUUID();
+    createdUserIds.push(userId);
+    await prisma.user.create({ data: { id: userId, name, email: `updates-page-${userId}@example.test` } });
+    return userId;
+  }
+
+  async function createWorkspaceWithItem(): Promise<{ itemId: string; creatorId: string }> {
+    const workspaceId = randomUUID();
+    const listId = randomUUID();
+    const creatorId = await createUser("Actor");
+    createdWorkspaceIds.push(workspaceId);
+    await prisma.workspace.create({ data: { id: workspaceId, name: "Test Workspace" } });
+    await prisma.list.create({ data: { id: listId, workspaceId, name: "Test List" } });
+    const itemId = randomUUID();
+    await prisma.item.create({ data: { id: itemId, listId, title: "Ship the release", creatorId } });
+    return { itemId, creatorId };
+  }
+
+  try {
+    // Activity returns only the signed-in User's own notifications, sorted
+    // newest first, and opening one (markNotificationRead) flips its read
+    // state and updates the unread badge count returned alongside it (#47).
+    {
+      const { itemId, creatorId } = await createWorkspaceWithItem();
+      const userId = await createUser("Recipient");
+      const otherUserId = await createUser("Someone Else");
+
+      const olderId = randomUUID();
+      await prisma.notification.create({
+        data: { id: olderId, recipientId: userId, actorId: creatorId, itemId, type: "ASSIGNEE_ADDED" },
+      });
+      await prisma.notification.update({ where: { id: olderId }, data: { createdAt: new Date(Date.now() - 60_000) } });
+      const newerId = randomUUID();
+      await prisma.notification.create({
+        data: { id: newerId, recipientId: userId, actorId: creatorId, itemId, type: "NOTE_ADDED" },
+      });
+      await prisma.notification.create({
+        data: { id: randomUUID(), recipientId: otherUserId, actorId: creatorId, itemId, type: "ASSIGNEE_ADDED" },
+      });
+
+      const before = await loadUpdatesPageData(prisma, { userId });
+      assert.deepEqual(before.notifications.map((n) => n.id), [newerId, olderId]);
+      assert.equal(before.unreadCount, 2);
+      assert.equal(before.notifications[0]?.isUnread, true);
+
+      await markNotificationRead(prisma, { notificationId: newerId, recipientId: userId });
+
+      const after = await loadUpdatesPageData(prisma, { userId });
+      assert.equal(after.unreadCount, 1);
+      const reopenedNewer = after.notifications.find((n) => n.id === newerId);
+      assert.equal(reopenedNewer?.isUnread, false);
+      const stillUnreadOlder = after.notifications.find((n) => n.id === olderId);
+      assert.equal(stillUnreadOlder?.isUnread, true);
+    }
+  } finally {
+    const listIds = (
+      await prisma.list.findMany({ where: { workspaceId: { in: createdWorkspaceIds } } })
+    ).map((list) => list.id);
+    await prisma.notification.deleteMany({ where: { item: { listId: { in: listIds } } } });
+    await prisma.item.deleteMany({ where: { listId: { in: listIds } } });
+    await prisma.list.deleteMany({ where: { id: { in: listIds } } });
+    await prisma.workspace.deleteMany({ where: { id: { in: createdWorkspaceIds } } });
+    await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+    await prisma.$disconnect();
+  }
+
+  console.log("Updates page smoke test passed");
+}
+
+void run().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});

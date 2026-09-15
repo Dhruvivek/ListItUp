@@ -34,6 +34,7 @@ export default async function WorkspaceLayout({
         currentWorkspaceName={membership.workspace.name}
         switchableWorkspaces={navData.switchableWorkspaces}
         personalSpace={navData.personalSpace}
+        unreadNotificationCount={navData.unreadNotificationCount}
       />
       <div className="min-w-0 flex-1">{children}</div>
     </div>
