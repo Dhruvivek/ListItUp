@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronRight, ChevronsUpDown } from "lucide-react";
 
-export type WorkspaceNavEntry = { id: string; name: string };
+import type { WorkspaceNavEntry } from "@/app/workspaces/[workspaceId]/layout-data";
 
 type WorkspaceSidebarProps = {
   currentWorkspaceId: string;
@@ -61,40 +61,33 @@ export function WorkspaceSidebar({
         )}
       </div>
 
-      {personalSpace && (
-        <div className="mt-2">
-          <button
-            type="button"
-            onClick={() => setIsPersonalSpaceOpen((open) => !open)}
-            aria-expanded={isPersonalSpaceOpen}
-            className="flex w-full items-center gap-1.5 rounded-md px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider text-neutral-500 hover:text-neutral-300"
-          >
-            {isPersonalSpaceOpen ? (
-              <ChevronDown className="h-3 w-3" />
-            ) : (
-              <ChevronRight className="h-3 w-3" />
-            )}
-            Personal Space
-          </button>
-
-          {isPersonalSpaceOpen && (
-            <div className="flex flex-col gap-0.5 pl-2">
-              <Link
-                href={`/workspaces/${personalSpace.id}`}
-                className="rounded-md px-2.5 py-1.5 text-sm text-neutral-300 hover:bg-[#1a1a1a] hover:text-white"
-              >
-                {personalSpace.name}
-              </Link>
-              <Link
-                href={`/workspaces/${personalSpace.id}/lists`}
-                className="rounded-md px-2.5 py-1.5 text-sm text-neutral-300 hover:bg-[#1a1a1a] hover:text-white"
-              >
-                Lists
-              </Link>
-            </div>
+      <div className="mt-2">
+        <button
+          type="button"
+          onClick={() => setIsPersonalSpaceOpen((open) => !open)}
+          aria-expanded={isPersonalSpaceOpen}
+          disabled={!personalSpace}
+          className="flex w-full items-center gap-1.5 rounded-md px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider text-neutral-500 hover:text-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isPersonalSpaceOpen ? (
+            <ChevronDown className="h-3 w-3" />
+          ) : (
+            <ChevronRight className="h-3 w-3" />
           )}
-        </div>
-      )}
+          Personal Space
+        </button>
+
+        {isPersonalSpaceOpen && personalSpace && (
+          <div className="flex flex-col gap-0.5 pl-2">
+            <Link
+              href={`/workspaces/${personalSpace.id}`}
+              className="rounded-md px-2.5 py-1.5 text-sm text-neutral-300 hover:bg-[#1a1a1a] hover:text-white"
+            >
+              {personalSpace.name}
+            </Link>
+          </div>
+        )}
+      </div>
     </aside>
   );
 }
