@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticatedSession } from "@/lib/session/require-authenticated-session";
 
-import { completeMyTaskItemAction } from "./actions";
+import { completeMyTaskItemAction, quickAddItemAction } from "./actions";
 import { MyTasksList } from "./MyTasksList";
 import { loadMyTasksPageData } from "./page-data";
+import { QuickAddForm } from "./QuickAddForm";
 
 type Props = {
   searchParams: Promise<{ workspace?: string; completed?: string; archived?: string }>;
@@ -50,6 +51,8 @@ export default async function MyTasksPage({ searchParams }: Props) {
         <p className="mt-3 max-w-xl text-sm leading-6 text-neutral-400">
           Every Item assigned to you, unified across your Workspaces and Personal Space.
         </p>
+
+        <QuickAddForm quickAddItemAction={quickAddItemAction} />
 
         <div className="mt-6 flex flex-wrap items-center gap-2">
           <a
