@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 
-import { countUnreadNotifications, loadActivityNotifications, markNotificationRead } from "./notification-inbox";
+import {
+  archiveNotification,
+  countUnreadNotifications,
+  loadActivityNotifications,
+  loadArchivedNotifications,
+  loadBookmarkedNotifications,
+  loadMentionedNotifications,
+  markNotificationRead,
+  toggleNotificationBookmark,
+} from "./notification-inbox";
 
 async function run() {
   if (!process.env.DATABASE_URL) {
@@ -46,6 +55,7 @@ async function run() {
     type: "ASSIGNEE_ADDED" | "ASSIGNEE_REMOVED" | "NOTE_ADDED" | "MENTIONED" | "STATE_CHANGED" | "DUE_DATE_REMINDER";
     readAt?: Date;
     archivedAt?: Date;
+    bookmarkedAt?: Date;
   }): Promise<string> {
     const id = randomUUID();
     await prisma.notification.create({
@@ -57,6 +67,7 @@ async function run() {
         type: input.type,
         readAt: input.readAt,
         archivedAt: input.archivedAt,
+        bookmarkedAt: input.bookmarkedAt,
       },
     });
     return id;
@@ -144,6 +155,125 @@ async function run() {
 
       await markNotificationRead(prisma, { notificationId: reminderId, recipientId });
       assert.equal(await countUnreadNotifications(prisma, recipientId), 0);
+    }
+
+    // Bookmarks, Archive, and @Mentioned are thin filters over the same
+    // notifications, each scoped to the recipient, against a fixture set
+    // with varying read/bookmarked/archived/type state (#49).
+    {
+      const { itemId, creatorId } = await createWorkspaceWithItem();
+      const recipientId = await createUser("Recipient");
+      const otherUserId = await createUser("Someone Else");
+
+      const bookmarkedActive = await createNotification({
+        recipientId,
+        actorId: creatorId,
+        itemId,
+        type: "ASSIGNEE_ADDED",
+        bookmarkedAt: new Date(),
+      });
+      const bookmarkedAndArchived = await createNotification({
+        recipientId,
+        actorId: creatorId,
+        itemId,
+        type: "NOTE_ADDED",
+        bookmarkedAt: new Date(),
+        archivedAt: new Date(),
+      });
+      const archivedOnly = await createNotification({
+        recipientId,
+        actorId: creatorId,
+        itemId,
+        type: "STATE_CHANGED",
+        archivedAt: new Date(),
+      });
+      const mentionActive = await createNotification({ recipientId, actorId: creatorId, itemId, type: "MENTIONED" });
+      const mentionArchived = await createNotification({
+        recipientId,
+        actorId: creatorId,
+        itemId,
+        type: "MENTIONED",
+        archivedAt: new Date(),
+      });
+      await createNotification({ recipientId: otherUserId, actorId: creatorId, itemId, type: "MENTIONED" });
+
+      const bookmarked = await loadBookmarkedNotifications(prisma, { recipientId });
+      assert.deepEqual(
+        bookmarked.map((n) => n.id).sort(),
+        [bookmarkedActive],
+        "Bookmarks excludes an archived-and-bookmarked notification — Archive owns that row now"
+      );
+
+      const archived = await loadArchivedNotifications(prisma, { recipientId });
+      assert.deepEqual(
+        archived.map((n) => n.id).sort(),
+        [archivedOnly, bookmarkedAndArchived, mentionArchived].sort(),
+        "Archive lists every archived notification regardless of type or bookmark state"
+      );
+      assert.equal(archived.find((n) => n.id === bookmarkedAndArchived)?.isBookmarked, true);
+
+      const mentioned = await loadMentionedNotifications(prisma, { recipientId });
+      assert.deepEqual(
+        mentioned.map((n) => n.id).sort(),
+        [mentionActive],
+        "@Mentioned excludes archived Mentions and another recipient's Mentions"
+      );
+    }
+
+    // toggleNotificationBookmark flips bookmarkedAt for the owning
+    // recipient only, and is a true toggle (bookmark, then unbookmark).
+    {
+      const { itemId, creatorId } = await createWorkspaceWithItem();
+      const recipientId = await createUser("Recipient");
+      const otherUserId = await createUser("Someone Else");
+      const notificationId = await createNotification({
+        recipientId,
+        actorId: creatorId,
+        itemId,
+        type: "ASSIGNEE_ADDED",
+      });
+
+      const otherAttempt = await toggleNotificationBookmark(prisma, { notificationId, recipientId: otherUserId });
+      assert.deepEqual(otherAttempt, { status: "not-found" });
+      assert.equal((await loadBookmarkedNotifications(prisma, { recipientId })).length, 0);
+
+      const bookmarked = await toggleNotificationBookmark(prisma, { notificationId, recipientId });
+      assert.deepEqual(bookmarked, { status: "bookmarked" });
+      assert.deepEqual((await loadBookmarkedNotifications(prisma, { recipientId })).map((n) => n.id), [
+        notificationId,
+      ]);
+
+      const unbookmarked = await toggleNotificationBookmark(prisma, { notificationId, recipientId });
+      assert.deepEqual(unbookmarked, { status: "unbookmarked" });
+      assert.equal((await loadBookmarkedNotifications(prisma, { recipientId })).length, 0);
+    }
+
+    // archiveNotification sets archivedAt for the owning recipient only,
+    // never deletes the row, and is idempotent when already archived.
+    {
+      const { itemId, creatorId } = await createWorkspaceWithItem();
+      const recipientId = await createUser("Recipient");
+      const otherUserId = await createUser("Someone Else");
+      const notificationId = await createNotification({
+        recipientId,
+        actorId: creatorId,
+        itemId,
+        type: "ASSIGNEE_ADDED",
+      });
+
+      await archiveNotification(prisma, { notificationId, recipientId: otherUserId });
+      assert.equal((await loadArchivedNotifications(prisma, { recipientId })).length, 0);
+
+      await archiveNotification(prisma, { notificationId, recipientId });
+      assert.deepEqual((await loadArchivedNotifications(prisma, { recipientId })).map((n) => n.id), [
+        notificationId,
+      ]);
+      assert.equal((await prisma.notification.count({ where: { id: notificationId } })), 1, "archiving never deletes the row");
+
+      await archiveNotification(prisma, { notificationId, recipientId });
+      assert.deepEqual((await loadArchivedNotifications(prisma, { recipientId })).map((n) => n.id), [
+        notificationId,
+      ]);
     }
   } finally {
     const listIds = (

@@ -23,6 +23,8 @@ export type ActivityNotification = {
   type: NotificationType;
   createdAt: Date;
   isUnread: boolean;
+  isBookmarked: boolean;
+  isArchived: boolean;
   actorName: string | null;
   itemId: string;
   itemTitle: string;
@@ -51,6 +53,39 @@ function itemHref(item: { id: string; list: { id: string; workspaceId: string } 
   return `/workspaces/${item.list.workspaceId}/lists/${item.list.id}/items/${item.id}`;
 }
 
+const NOTIFICATION_INCLUDE = {
+  actor: { select: { name: true } },
+  item: { select: { id: true, title: true, list: { select: { id: true, workspaceId: true } } } },
+} as const;
+
+// Shared row shape produced by NOTIFICATION_INCLUDE above, factored out so
+// every tab-specific load function below maps a Notification row the same
+// way instead of repeating this formatting (Activity, Bookmarks, Archive,
+// and @Mentioned are thin filters over identical row data, #49).
+function mapNotification(notification: {
+  id: string;
+  type: NotificationType;
+  createdAt: Date;
+  readAt: Date | null;
+  bookmarkedAt: Date | null;
+  archivedAt: Date | null;
+  actor: { name: string | null } | null;
+  item: { id: string; title: string; list: { id: string; workspaceId: string } };
+}): ActivityNotification {
+  return {
+    id: notification.id,
+    type: notification.type,
+    createdAt: notification.createdAt,
+    isUnread: notification.readAt === null,
+    isBookmarked: notification.bookmarkedAt !== null,
+    isArchived: notification.archivedAt !== null,
+    actorName: notification.actor?.name ?? null,
+    itemId: notification.item.id,
+    itemTitle: notification.item.title,
+    itemHref: itemHref(notification.item),
+  };
+}
+
 // Reads are scoped by recipientId directly — a Notification row is already
 // access-controlled at creation time (see notification-triggers.ts), so
 // there's no separate lib/permissions/ check on the read path, matching
@@ -63,23 +98,62 @@ export async function loadActivityNotifications(
 
   const notifications = await database.notification.findMany({
     where: { recipientId: input.recipientId, type: { in: types }, archivedAt: null },
-    include: {
-      actor: { select: { name: true } },
-      item: { select: { id: true, title: true, list: { select: { id: true, workspaceId: true } } } },
-    },
+    include: NOTIFICATION_INCLUDE,
     orderBy: { createdAt: "desc" },
   });
 
-  return notifications.map((notification) => ({
-    id: notification.id,
-    type: notification.type,
-    createdAt: notification.createdAt,
-    isUnread: notification.readAt === null,
-    actorName: notification.actor?.name ?? null,
-    itemId: notification.item.id,
-    itemTitle: notification.item.title,
-    itemHref: itemHref(notification.item),
-  }));
+  return notifications.map(mapNotification);
+}
+
+// Bookmarking is independent of archiving (a User can archive a bookmarked
+// notification to clear it from every other tab while keeping the flag for
+// when they look at Archive), but Bookmarks itself only shows notifications
+// still in the active view — an archived one is found in Archive instead,
+// per the "archive removes from active view" semantics in
+// docs/QnA/inbox-notifications-feature-surface.md.
+export async function loadBookmarkedNotifications(
+  database: PrismaClient,
+  input: { recipientId: string }
+): Promise<ActivityNotification[]> {
+  const notifications = await database.notification.findMany({
+    where: { recipientId: input.recipientId, bookmarkedAt: { not: null }, archivedAt: null },
+    include: NOTIFICATION_INCLUDE,
+    orderBy: { createdAt: "desc" },
+  });
+
+  return notifications.map(mapNotification);
+}
+
+// Archive lists every archived notification regardless of type or category
+// — it's the one tab that exists specifically to hold what the other tabs
+// hide, never a delete (#49).
+export async function loadArchivedNotifications(
+  database: PrismaClient,
+  input: { recipientId: string }
+): Promise<ActivityNotification[]> {
+  const notifications = await database.notification.findMany({
+    where: { recipientId: input.recipientId, archivedAt: { not: null } },
+    include: NOTIFICATION_INCLUDE,
+    orderBy: { createdAt: "desc" },
+  });
+
+  return notifications.map(mapNotification);
+}
+
+// @Mentioned narrows to MENTIONED-type notifications only — the same type
+// Activity's "Mentions" category chip filters to, surfaced here as its own
+// top-level tab per CONTEXT.md's Updates entry.
+export async function loadMentionedNotifications(
+  database: PrismaClient,
+  input: { recipientId: string }
+): Promise<ActivityNotification[]> {
+  const notifications = await database.notification.findMany({
+    where: { recipientId: input.recipientId, type: { in: ACTIVITY_CATEGORY_TYPES.mentions }, archivedAt: null },
+    include: NOTIFICATION_INCLUDE,
+    orderBy: { createdAt: "desc" },
+  });
+
+  return notifications.map(mapNotification);
 }
 
 // Counts every unread, non-archived Notification regardless of type —
@@ -100,5 +174,49 @@ export async function markNotificationRead(
   await database.notification.updateMany({
     where: { id: input.notificationId, recipientId: input.recipientId, readAt: null },
     data: { readAt: new Date() },
+  });
+}
+
+export type ToggleNotificationBookmarkResult =
+  | { status: "bookmarked" }
+  | { status: "unbookmarked" }
+  | { status: "not-found" };
+
+// Scoped to recipientId, same ownership check as markNotificationRead — a
+// User can only bookmark their own notifications. A toggle rather than a
+// set/unset pair, matching lib/list/list-starring.ts's toggleStarred.
+export async function toggleNotificationBookmark(
+  database: PrismaClient,
+  input: { notificationId: string; recipientId: string }
+): Promise<ToggleNotificationBookmarkResult> {
+  const notification = await database.notification.findFirst({
+    where: { id: input.notificationId, recipientId: input.recipientId },
+    select: { bookmarkedAt: true },
+  });
+  if (!notification) {
+    return { status: "not-found" };
+  }
+
+  const isBookmarked = notification.bookmarkedAt !== null;
+  await database.notification.update({
+    where: { id: input.notificationId },
+    data: { bookmarkedAt: isBookmarked ? null : new Date() },
+  });
+
+  return { status: isBookmarked ? "unbookmarked" : "bookmarked" };
+}
+
+// Scoped to recipientId, same ownership check as markNotificationRead.
+// One-directional (archive only, no restore) — this ticket's acceptance
+// criteria only calls for archiving without deleting the underlying record,
+// not a restore action (#49). A no-op if already archived, keeping this
+// idempotent like markNotificationRead.
+export async function archiveNotification(
+  database: PrismaClient,
+  input: { notificationId: string; recipientId: string }
+): Promise<void> {
+  await database.notification.updateMany({
+    where: { id: input.notificationId, recipientId: input.recipientId, archivedAt: null },
+    data: { archivedAt: new Date() },
   });
 }

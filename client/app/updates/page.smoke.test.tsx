@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 
-import { markNotificationRead } from "@/lib/notification/notification-inbox";
+import { archiveNotification, markNotificationRead, toggleNotificationBookmark } from "@/lib/notification/notification-inbox";
 
 import { loadUpdatesPageData } from "./page-data";
 
@@ -63,19 +63,52 @@ async function run() {
         data: { id: randomUUID(), recipientId: otherUserId, actorId: creatorId, itemId, type: "ASSIGNEE_ADDED" },
       });
 
-      const before = await loadUpdatesPageData(prisma, { userId });
+      const before = await loadUpdatesPageData(prisma, { userId, tab: "activity" });
       assert.deepEqual(before.notifications.map((n) => n.id), [newerId, olderId]);
       assert.equal(before.unreadCount, 2);
       assert.equal(before.notifications[0]?.isUnread, true);
 
       await markNotificationRead(prisma, { notificationId: newerId, recipientId: userId });
 
-      const after = await loadUpdatesPageData(prisma, { userId });
+      const after = await loadUpdatesPageData(prisma, { userId, tab: "activity" });
       assert.equal(after.unreadCount, 1);
       const reopenedNewer = after.notifications.find((n) => n.id === newerId);
       assert.equal(reopenedNewer?.isUnread, false);
       const stillUnreadOlder = after.notifications.find((n) => n.id === olderId);
       assert.equal(stillUnreadOlder?.isUnread, true);
+    }
+
+    // Bookmarks, Archive, and @Mentioned tabs each return the correctly
+    // filtered slice of the same fixture set, scoped to the signed-in User
+    // (#49's per-tab smoke coverage).
+    {
+      const { itemId, creatorId } = await createWorkspaceWithItem();
+      const userId = await createUser("Recipient");
+
+      const toBookmark = randomUUID();
+      await prisma.notification.create({
+        data: { id: toBookmark, recipientId: userId, actorId: creatorId, itemId, type: "ASSIGNEE_ADDED" },
+      });
+      const toArchive = randomUUID();
+      await prisma.notification.create({
+        data: { id: toArchive, recipientId: userId, actorId: creatorId, itemId, type: "STATE_CHANGED" },
+      });
+      const mentionId = randomUUID();
+      await prisma.notification.create({
+        data: { id: mentionId, recipientId: userId, actorId: creatorId, itemId, type: "MENTIONED" },
+      });
+
+      await toggleNotificationBookmark(prisma, { notificationId: toBookmark, recipientId: userId });
+      await archiveNotification(prisma, { notificationId: toArchive, recipientId: userId });
+
+      const bookmarksTab = await loadUpdatesPageData(prisma, { userId, tab: "bookmarks" });
+      assert.deepEqual(bookmarksTab.notifications.map((n) => n.id), [toBookmark]);
+
+      const archiveTab = await loadUpdatesPageData(prisma, { userId, tab: "archive" });
+      assert.deepEqual(archiveTab.notifications.map((n) => n.id), [toArchive]);
+
+      const mentionedTab = await loadUpdatesPageData(prisma, { userId, tab: "mentioned" });
+      assert.deepEqual(mentionedTab.notifications.map((n) => n.id), [mentionId]);
     }
   } finally {
     const listIds = (
