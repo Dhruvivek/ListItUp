@@ -459,6 +459,66 @@ async function run() {
         ]
       );
     }
+
+    // Dashboard tab's count/breakdown widgets (#51) reflect real Items
+    // across Sections and states, not the reserved placeholder.
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const memberId = await createUser();
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: memberId, role: "MEMBER" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: memberId, role: "MEMBER" },
+      });
+      const backlog = await prisma.section.create({
+        data: { id: randomUUID(), listId, name: "Backlog", order: 0 },
+      });
+      const now = new Date("2026-09-15T12:00:00.000Z");
+      await prisma.item.create({
+        data: {
+          id: randomUUID(),
+          listId,
+          sectionId: backlog.id,
+          title: "Overdue item",
+          creatorId: memberId,
+          dueDate: new Date("2026-09-10T00:00:00.000Z"),
+        },
+      });
+      await prisma.item.create({
+        data: {
+          id: randomUUID(),
+          listId,
+          sectionId: backlog.id,
+          title: "Completed item",
+          state: "COMPLETE",
+          creatorId: memberId,
+        },
+      });
+      await prisma.item.create({
+        data: { id: randomUUID(), listId, title: "Unsectioned item", creatorId: memberId },
+      });
+
+      const data = await loadListPageData(prisma, { userId: memberId, workspaceId, listId, now });
+
+      assert.ok(data);
+      assert.deepEqual(data!.dashboard.counts, { total: 3, completed: 1, incomplete: 2, overdue: 1 });
+      assert.deepEqual(data!.dashboard.bySection, [
+        { sectionId: backlog.id, sectionName: "Backlog", count: 2 },
+        { sectionId: null, sectionName: "No Section", count: 1 },
+      ]);
+      assert.deepEqual(
+        data!.dashboard.byState.map((entry) => [entry.label, entry.count]),
+        [
+          ["To Do", 2],
+          ["In Progress", 0],
+          ["Blocked", 0],
+          ["Complete", 1],
+        ]
+      );
+      assert.equal(data!.dashboard.completionOverTime.length, 14);
+      assert.equal(data!.dashboard.completionOverTime.at(-1)?.cumulativeCompleted, 1);
+    }
   } finally {
     const listIds = (
       await prisma.list.findMany({ where: { workspaceId: { in: createdWorkspaceIds } } })

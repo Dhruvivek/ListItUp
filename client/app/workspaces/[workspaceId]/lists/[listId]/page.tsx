@@ -21,6 +21,7 @@ import {
   updateListDescriptionAction,
 } from "./actions";
 import { BoardView } from "./BoardView";
+import { DashboardTab } from "./DashboardTab";
 import { FilesView } from "./FilesView";
 import { loadListPageData, type ListPageData } from "./page-data";
 import { SectionList } from "./SectionList";
@@ -58,12 +59,16 @@ function isTabKey(value: string): value is TabKey {
   return TAB_KEYS.includes(value);
 }
 
-// Calendar ships in its own ticket (#32). Dashboard and Messages are this
-// spec's deliberately reserved placeholders (Reports & Analytics, and the
-// v2 Chat/VC work).
-const TAB_NOTES: Record<Exclude<TabKey, "overview" | "list" | "board" | "timeline" | "files">, string> = {
+// Calendar ships in its own ticket (#32). Messages is this spec's
+// deliberately reserved placeholder (v2 Chat/VC work). Dashboard's
+// count/breakdown widgets shipped in #51 — its remaining widgets
+// (heatmap #54, progress #55, contribution map #56, radar #57, peer
+// comparison #58) are still to come, added onto DashboardTab as they ship.
+const TAB_NOTES: Record<
+  Exclude<TabKey, "overview" | "list" | "board" | "timeline" | "files" | "dashboard">,
+  string
+> = {
   calendar: "Calendar view ships in its own ticket (#32).",
-  dashboard: "Reserved — Dashboard content ships with the Reports & Analytics spec.",
   messages: "Reserved — Messages ships with the v2 Chat/VC system.",
 };
 
@@ -332,6 +337,13 @@ export default async function ListPage({ params, searchParams }: Props) {
           <TimelineView items={data.timelineItems} workspaceId={workspaceId} listId={listId} />
         ) : activeTab === "files" ? (
           <FilesView entries={data.filesViewEntries} workspaceId={workspaceId} listId={listId} />
+        ) : activeTab === "dashboard" ? (
+          <DashboardTab
+            counts={data.dashboard.counts}
+            bySection={data.dashboard.bySection}
+            byState={data.dashboard.byState}
+            completionOverTime={data.dashboard.completionOverTime}
+          />
         ) : (
           <div className="mt-10 rounded-lg border border-dashed border-neutral-800 px-4 py-16 text-center text-sm text-neutral-600">
             {TAB_NOTES[activeTab]}
