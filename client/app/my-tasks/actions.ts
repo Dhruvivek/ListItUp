@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { isValidMyTasksBoardGroupBy, moveMyTaskItemToColumn } from "@/lib/item/item-my-tasks-board";
 import { createItemFromQuickAdd } from "@/lib/item/item-quick-add";
 import { transitionItemState } from "@/lib/item/item-lifecycle";
 import { prisma } from "@/lib/prisma";
@@ -32,5 +33,31 @@ export async function quickAddItemAction(formData: FormData): Promise<void> {
   }
 
   await createItemFromQuickAdd(prisma, { actorUserId: session.user.id, text });
+  revalidatePath(MY_TASKS_PATH);
+}
+
+// Moving a card on My Tasks' Board dispatches through the same lib/item
+// mutations as the List page's Board move (#43) — see
+// moveMyTaskItemToColumn in lib/item/item-my-tasks-board.ts for why that's
+// safe across Workspaces without extra checks here.
+export async function moveMyTaskItemAction(
+  groupBy: string,
+  itemId: string,
+  columnKey: string,
+  blockerReason?: string
+): Promise<void> {
+  const session = await requireAuthenticatedSession(MY_TASKS_PATH);
+
+  if (!isValidMyTasksBoardGroupBy(groupBy)) {
+    return;
+  }
+
+  await moveMyTaskItemToColumn(prisma, {
+    actorUserId: session.user.id,
+    itemId,
+    groupBy,
+    columnKey,
+    blockerReason,
+  });
   revalidatePath(MY_TASKS_PATH);
 }

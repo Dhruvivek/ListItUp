@@ -1,5 +1,13 @@
 import type { Item, ItemPriority, ItemState, PrismaClient, WorkspaceKind } from "@/generated/prisma/client";
 
+export type MyTaskAttachment = {
+  id: string;
+  fileName: string;
+  sizeBytes: number;
+  uploaderName: string;
+  createdAt: Date;
+};
+
 export type MyTaskItem = {
   id: string;
   title: string;
@@ -12,6 +20,10 @@ export type MyTaskItem = {
   sourceWorkspaceId: string;
   sourceWorkspaceName: string;
   sourceWorkspaceKind: WorkspaceKind;
+  // Board's grouping is view-only for WORKSPACE (#43) and Files aggregates
+  // across every assigned Item (#22-equivalent for My Tasks) — both views
+  // read straight off this same fetch rather than issuing their own query.
+  attachments: MyTaskAttachment[];
 };
 
 // Hidden from My Tasks unless explicitly requested via includeCompleted/
@@ -48,7 +60,10 @@ export function sortMyTasks<T extends { priority: ItemPriority; dueDate: Date | 
 }
 
 function toMyTaskItem(
-  item: Item & { list: { id: string; name: string; workspaceId: string; workspace: { id: string; name: string; kind: WorkspaceKind } } }
+  item: Item & {
+    list: { id: string; name: string; workspaceId: string; workspace: { id: string; name: string; kind: WorkspaceKind } };
+    attachments: { id: string; fileName: string; sizeBytes: number; createdAt: Date; uploader: { name: string } }[];
+  }
 ): MyTaskItem {
   return {
     id: item.id,
@@ -62,6 +77,13 @@ function toMyTaskItem(
     sourceWorkspaceId: item.list.workspace.id,
     sourceWorkspaceName: item.list.workspace.name,
     sourceWorkspaceKind: item.list.workspace.kind,
+    attachments: item.attachments.map((attachment) => ({
+      id: attachment.id,
+      fileName: attachment.fileName,
+      sizeBytes: attachment.sizeBytes,
+      uploaderName: attachment.uploader.name,
+      createdAt: attachment.createdAt,
+    })),
   };
 }
 
@@ -95,6 +117,7 @@ export async function loadMyTasksItems(
       item: {
         include: {
           list: { include: { workspace: true } },
+          attachments: { include: { uploader: { select: { name: true } } } },
         },
       },
     },
