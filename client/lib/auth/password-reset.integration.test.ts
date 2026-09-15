@@ -6,6 +6,7 @@ import type {
   SendEmailInput,
   SendEmailResult,
 } from "@/lib/mailer/mailer-core";
+import { requestPasswordResetEmail } from "./password-reset-request";
 
 function sessionCookie(response: Response): string | null {
   const setCookie = response.headers.get("set-cookie");
@@ -278,10 +279,51 @@ async function run() {
     assert.ok(sessionCookie(signInWithNewPassword));
   }
 
+  async function testAppRequestedResetEmailLinksToTheAppsOwnResetPage() {
+    const { email } = await createVerifiedUserWithSession();
+
+    const outcome = await requestPasswordResetEmail(prisma, fakeMailer, email);
+    assert.equal(outcome, "sent");
+
+    const sends = sentEmails.filter(
+      (send) => send.to === email && send.type === "password-reset"
+    );
+    const resetUrl = new URL(
+      extractUrl(sends[sends.length - 1].template.text)
+    );
+
+    // The app's /reset-password page reads its token from a query param,
+    // not a path segment, so the emailed link must be navigable there
+    // directly rather than 404ing against a route that doesn't exist.
+    assert.equal(resetUrl.pathname, "/reset-password");
+    const token = resetUrl.searchParams.get("token");
+    assert.ok(token, "expected a token query param in the reset link");
+
+    const resetResponse = await auth.handler(
+      new Request("http://localhost:3000/api/auth/reset-password", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "http://localhost:3000",
+        },
+        body: JSON.stringify({
+          newPassword: "a-linked-long-password",
+          token,
+        }),
+      })
+    );
+    assert.equal(
+      resetResponse.status,
+      200,
+      "the token from the emailed link must actually reset the password"
+    );
+  }
+
   try {
     await testRequestReturnsGenericMessageForUnknownAndKnownEmail();
     await testResetLinkIsSingleUseAndReissueInvalidatesPrior();
     await testResetUpdatesPasswordAndRevokesAllSessions();
+    await testAppRequestedResetEmailLinksToTheAppsOwnResetPage();
   } finally {
     await prisma.workspace.deleteMany({
       where: { members: { some: { user: { email: { in: testEmails } } } } },

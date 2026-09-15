@@ -13,6 +13,7 @@ model User {
   email            String            @unique
   emailVerified    Boolean           @default(false)
   image            String?
+  aboutMe          String?
   twoFactorEnabled Boolean           @default(false)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
@@ -23,6 +24,14 @@ model User {
   listMembers      ListMember[]
   guestAccess      Guest[]
   starredLists     Starred[]
+  createdItems     Item[]           @relation("ItemCreator")
+  itemAssignments  ItemAssignee[]
+  uploadedAttachments Attachment[]
+  authoredNotes    Note[]         @relation("NoteAuthor")
+  mentions         Mention[]      @relation("MentionedUser")
+  personalNotes    PersonalNote[] @relation("PersonalNoteOwner")
+  notifications    Notification[] @relation("NotificationRecipient")
+  triggeredNotifications Notification[] @relation("NotificationActor")
   platformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentUser")
   grantedPlatformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentGranter")
   revokedPlatformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentRevoker")
@@ -104,6 +113,7 @@ model Workspace {
   lists       List[]
   members     WorkspaceMember[]
   invitations WorkspaceInvitation[]
+  labels      Label[]
 
   @@map("workspace")
 }
@@ -172,6 +182,10 @@ model List {
   // native enum, since the full set of groupable fields depends on Item's
   // not-yet-built schema (#30); only "SECTION" is legal today.
   groupBy     String       @default("SECTION")
+  // Board view's own "Group by" (#31) — independent of the List view's
+  // groupBy above, since a User may want the two views arranged
+  // differently at once. See lib/list/list-board.ts's isValidBoardGroupBy.
+  boardGroupBy String      @default("STATE")
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -179,6 +193,8 @@ model List {
   guests      Guest[]
   starredBy   Starred[]
   sections    Section[]
+  items       Item[]
+  customFieldDefinitions CustomFieldDefinition[]
 
   @@index([workspaceId])
   @@map("list")
@@ -237,9 +253,298 @@ model Section {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   list      List     @relation(fields: [listId], references: [id], onDelete: Cascade)
+  items     Item[]
 
   @@index([listId])
   @@map("section")
+}
+
+enum ItemState {
+  TO_DO
+  IN_PROGRESS
+  BLOCKED
+  COMPLETE
+  ARCHIVED
+}
+
+enum ItemPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+model Item {
+  id        String       @id
+  listId    String
+  // Self-referencing parent supports arbitrary-depth nesting through one
+  // mechanism — no separate Subtask concept (#23, #30).
+  parentId  String?
+  sectionId String?
+  title     String
+  // Timeline view's date-bar start (#33) — optional and independent of
+  // dueDate, which remains the only date required to appear on Timeline.
+  startDate DateTime?
+  dueDate   DateTime?
+  state     ItemState    @default(TO_DO)
+  // The state to return to on restore, set by archiveItem() and cleared by
+  // restoreItem() (#38) — Item has no separate archivedAt timestamp like
+  // List, so "archived" is state === ARCHIVED and this is the only place
+  // the prior state survives the overwrite.
+  stateBeforeArchive ItemState?
+  priority  ItemPriority @default(NORMAL)
+  // Required when state is BLOCKED (enforced at the application layer in
+  // lib/item/, not at the schema level).
+  blockerReason String?
+  // Set once at creation; never reassigned as Assignees change — enforced
+  // at the application layer in lib/item/, matching Section/List's
+  // established convention for this kind of invariant.
+  creatorId String
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  list      List           @relation(fields: [listId], references: [id], onDelete: Cascade)
+  section   Section?       @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  parent    Item?          @relation("ItemHierarchy", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children  Item[]         @relation("ItemHierarchy")
+  creator   User           @relation("ItemCreator", fields: [creatorId], references: [id])
+  assignees ItemAssignee[]
+  labels    ItemLabel[]
+  customFieldValues CustomFieldValue[]
+  // Dependencies where this Item is the blocker/blocked side, respectively
+  // (#35).
+  blocking  ItemDependency[] @relation("DependencyBlocker")
+  blockedBy ItemDependency[] @relation("DependencyBlocked")
+  attachments Attachment[]
+  notes         Note[]
+  personalNotes PersonalNote[]
+  notifications Notification[]
+
+  @@index([listId])
+  @@index([sectionId])
+  @@index([parentId])
+  @@map("item")
+}
+
+model ItemAssignee {
+  id        String   @id
+  itemId    String
+  userId    String
+  createdAt DateTime @default(now())
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, userId])
+  @@index([userId])
+  @@map("item_assignee")
+}
+
+// Creating a Label is gated (Personal-Space-free / Workspace-Owner-Admin
+// in a shared Workspace, mirroring List-creation rights); applying an
+// existing Label to an Item is not — any List Member with Item access can
+// (#34).
+model Label {
+  id          String      @id
+  workspaceId String
+  name        String
+  createdAt   DateTime    @default(now())
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  items       ItemLabel[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("label")
+}
+
+model ItemLabel {
+  id        String   @id
+  itemId    String
+  labelId   String
+  createdAt DateTime @default(now())
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  label     Label    @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, labelId])
+  @@index([labelId])
+  @@map("item_label")
+}
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DROPDOWN
+  DATE
+}
+
+// Defined per List by a List Lead or Workspace Admin; any List Member can
+// set a value on an Item (#34).
+model CustomFieldDefinition {
+  id        String            @id
+  listId    String
+  name      String
+  type      CustomFieldType
+  // DROPDOWN's allowed option strings; unused (empty) for other types.
+  options   String[]          @default([])
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  list      List              @relation(fields: [listId], references: [id], onDelete: Cascade)
+  values    CustomFieldValue[]
+
+  @@unique([listId, name])
+  @@index([listId])
+  @@map("custom_field_definition")
+}
+
+model CustomFieldValue {
+  id           String                 @id
+  itemId       String
+  definitionId String
+  // Stored as text regardless of the definition's type and
+  // parsed/validated against it at the application layer (lib/item/) —
+  // avoids a sparse multi-column value table for 4 possible types.
+  value        String
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  item         Item                   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  definition   CustomFieldDefinition  @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, definitionId])
+  @@index([definitionId])
+  @@map("custom_field_value")
+}
+
+// A directed link between two Items, including across different Lists —
+// purely informational, never changes either Item's lifecycle state
+// (#35). blocker "blocks" blocked; blocked "is blocked by" blocker.
+model ItemDependency {
+  id        String   @id
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+  blocker   Item     @relation("DependencyBlocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   Item     @relation("DependencyBlocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+  @@map("item_dependency")
+}
+
+// A List Member can attach a file to an Item (#39). Metadata + storageKey
+// only — lib/item/ never touches file bytes; the Route Handler upload
+// transport writes to S3-compatible storage (ADR 0002) and hands this
+// model its storageKey. No preview rendering or malware scanning in v1
+// (#40); ZIP contents stay download-only.
+model Attachment {
+  id          String   @id
+  itemId      String
+  uploaderId  String
+  fileName    String
+  contentType String
+  sizeBytes   Int
+  storageKey  String
+  createdAt   DateTime @default(now())
+  item        Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  uploader    User     @relation(fields: [uploaderId], references: [id])
+
+  @@index([itemId])
+  @@map("attachment")
+}
+
+// A team-visible text update on an Item (#37) — Comment/reply/thread are
+// deliberately avoided terms per CONTEXT.md's Note entry: no nested replies
+// in v1.
+model Note {
+  id        String    @id
+  itemId    String
+  authorId  String
+  body      String
+  createdAt DateTime  @default(now())
+  item      Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  author    User      @relation("NoteAuthor", fields: [authorId], references: [id])
+  mentions  Mention[]
+  notifications Notification[]
+
+  @@index([itemId])
+  @@map("note")
+}
+
+// A `@name` reference to a User inside a Note's body, validated at write
+// time (lib/item/) against Users who already have access to the Note's
+// Item — mentioning is never itself a grant of access (#37).
+model Mention {
+  id        String   @id
+  noteId    String
+  userId    String
+  createdAt DateTime @default(now())
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  user      User     @relation("MentionedUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([noteId, userId])
+  @@index([userId])
+  @@map("mention")
+}
+
+// A private, per-User-per-Item planning note (#37) — visible only to its
+// owning User and never surfaced on the shared Item, distinct from the
+// team-visible Note above.
+model PersonalNote {
+  id        String   @id
+  itemId    String
+  userId    String
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  user      User     @relation("PersonalNoteOwner", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, userId])
+  @@map("personal_note")
+}
+
+enum NotificationType {
+  ASSIGNEE_ADDED
+  ASSIGNEE_REMOVED
+  NOTE_ADDED
+  MENTIONED
+  STATE_CHANGED
+  DUE_DATE_REMINDER
+}
+
+// Delivery record for the Updates surface (CONTEXT.md) — always scoped to
+// exactly one recipient, so per-recipient read/bookmarked/archived state
+// lives directly on this row rather than a separate shared-state table
+// (#41). Created by lib/notification/'s trigger functions on Assignee-list
+// change, Note creation (including @Mention resolution), Item lifecycle
+// state change, and a due-date-approaching schedule; never edited by any
+// other lib/ module.
+model Notification {
+  id          String            @id
+  recipientId String
+  type        NotificationType
+  itemId      String
+  // The User whose action produced this notification; null for the
+  // system-triggered DUE_DATE_REMINDER type, which has no actor.
+  actorId     String?
+  // Set only for NOTE_ADDED/MENTIONED, linking back to the triggering Note.
+  noteId      String?
+  // Snapshot of the Item's dueDate at DUE_DATE_REMINDER creation time, used
+  // by the dedup constraint below so a reminder fires once per approaching
+  // deadline rather than once per scheduler run (#41) — null for every
+  // other type.
+  dueDateAt   DateTime?
+  readAt       DateTime?
+  bookmarkedAt DateTime?
+  archivedAt   DateTime?
+  createdAt   DateTime          @default(now())
+
+  recipient User  @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor     User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  item      Item  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  note      Note? @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@unique([recipientId, itemId, type, dueDateAt])
+  @@index([recipientId, createdAt])
+  @@index([recipientId, type])
+  @@map("notification")
 }
 
 // Better Auth's email-verification tokens are stateless signed JWTs and are

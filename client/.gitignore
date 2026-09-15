@@ -17,7 +17,7 @@
 
 # next.js
 /.next/
-/.next-smtp-failure/
+/.next-*/
 /out/
 
 # production

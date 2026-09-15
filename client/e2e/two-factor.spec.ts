@@ -9,9 +9,9 @@ test("a User must acknowledge saved recovery codes before 2FA enrollment confirm
   page,
 }) => {
   // This flow makes several full round trips (sign-up, verify, enable,
-  // confirm) — under CI load that's occasionally slower than the default
-  // 30-60s test budget affords.
-  test.setTimeout(90_000);
+  // confirm), and the confirm step alone can wait up to 45s per attempt —
+  // give it real headroom under CI load.
+  test.setTimeout(120_000);
 
   const user = uniqueTestUser("two-factor-enroll");
   await signUpAndVerify(page, user);
@@ -24,10 +24,10 @@ test("a 2FA-enabled User is challenged at sign-in, and password reset still requ
   page,
   context,
 }) => {
-  // This is the heaviest journey in the suite: two full round trips
-  // (enrollment, then a fresh sign-in/reset/challenge cycle), so give it
-  // more room than the default budget under CI load.
-  test.setTimeout(150_000);
+  // This is the heaviest journey in the suite: enrollment (whose confirm
+  // step alone can wait up to 45s per attempt), then a fresh sign-in/
+  // reset/challenge cycle — give it real headroom under CI load.
+  test.setTimeout(180_000);
 
   const user = uniqueTestUser("two-factor-challenge");
   await signUpAndVerify(page, user);

@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 
 import type { ListMemberRole } from "@/generated/prisma/client";
+import { createItem } from "@/lib/item/item-creation";
+import { restoreItem } from "@/lib/item/item-lifecycle";
+import { isValidBoardGroupBy, moveItemToColumn, setBoardGroupBy, type BoardGroupBy } from "@/lib/list/list-board";
 import { grantGuestAccess, revokeGuestAccess } from "@/lib/list/list-guests";
 import { updateListDescription } from "@/lib/list/list-lifecycle";
 import { addListMember, removeListMember } from "@/lib/list/list-membership";
@@ -183,5 +186,76 @@ export async function setListGroupByAction(
   const groupBy = String(formData.get("groupBy") ?? "");
 
   await setListGroupBy(prisma, { actorUserId: session.user.id, listId, groupBy });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+export async function addItemAction(
+  workspaceId: string,
+  listId: string,
+  sectionId: string | null,
+  formData: FormData
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+  const title = String(formData.get("title") ?? "").trim();
+
+  if (!title) {
+    return;
+  }
+
+  await createItem(prisma, {
+    actorUserId: session.user.id,
+    listId,
+    title,
+    sectionId: sectionId ?? undefined,
+  });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+// The List/Board Archived toggle only Restores (Archiving happens from the
+// Item detail page) — uses lib/item/'s dedicated restoreItem, not a new
+// mutation (#38).
+export async function restoreItemAction(
+  workspaceId: string,
+  listId: string,
+  itemId: string
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+  await restoreItem(prisma, { actorUserId: session.user.id, itemId });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+export async function setBoardGroupByAction(
+  workspaceId: string,
+  listId: string,
+  formData: FormData
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+  const groupBy = String(formData.get("groupBy") ?? "");
+
+  await setBoardGroupBy(prisma, { actorUserId: session.user.id, listId, groupBy });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+export async function moveItemToColumnAction(
+  workspaceId: string,
+  listId: string,
+  groupBy: string,
+  itemId: string,
+  columnKey: string,
+  blockerReason?: string
+): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+
+  if (!isValidBoardGroupBy(groupBy)) {
+    return;
+  }
+
+  await moveItemToColumn(prisma, {
+    actorUserId: session.user.id,
+    itemId,
+    groupBy: groupBy as BoardGroupBy,
+    columnKey,
+    blockerReason,
+  });
   revalidatePath(listPath(workspaceId, listId));
 }

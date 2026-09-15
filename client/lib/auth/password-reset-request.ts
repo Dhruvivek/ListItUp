@@ -32,7 +32,10 @@ export async function requestPasswordResetEmail(
 
   const baseUrl = process.env.BETTER_AUTH_URL;
   if (!baseUrl) throw new Error("BETTER_AUTH_URL must be set.");
-  const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(token)}&callbackURL=${encodeURIComponent("/reset-password")}`;
+  // The app's own reset-password page reads its token from a query param,
+  // not a path segment (unlike Better Auth's built-in reset-password
+  // redirect endpoint), so the link must match that shape to be navigable.
+  const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
   const result = await mailer.send({
     to: user.email,
     type: "password-reset",

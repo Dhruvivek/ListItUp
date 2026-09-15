@@ -35,7 +35,7 @@ export function TwoFactorSettings({
   );
   const [codesSavedConfirmed, setCodesSavedConfirmed] = useState(false);
 
-  if (confirmState.status === "confirmed" || twoFactorEnabled) {
+  if (twoFactorEnabled) {
     return <TwoFactorEnabledPanel />;
   }
 

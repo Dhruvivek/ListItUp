@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { APIError } from "better-auth";
 import QRCode from "qrcode";
 
@@ -76,8 +77,7 @@ export async function enableTwoFactorAction(
 
 export type ConfirmTwoFactorState =
   | { status: "idle" }
-  | { status: "error"; message: string }
-  | { status: "confirmed" };
+  | { status: "error"; message: string };
 
 export async function confirmTwoFactorEnrollmentAction(
   _prevState: ConfirmTwoFactorState,
@@ -100,6 +100,11 @@ export async function confirmTwoFactorEnrollmentAction(
   }
 
   const requestHeaders = await headers();
+  // A successful TOTP confirmation makes Better Auth reissue the session
+  // cookie, so this is the last point the pre-rotation session can be read
+  // reliably — both for the notice below and to avoid the page's own
+  // post-action re-render seeing an already-rotated-away session.
+  const session = await auth.api.getSession({ headers: requestHeaders });
 
   try {
     await auth.api.verifyTOTP({
@@ -114,7 +119,6 @@ export async function confirmTwoFactorEnrollmentAction(
     throw error;
   }
 
-  const session = await auth.api.getSession({ headers: requestHeaders });
   if (session) {
     await enqueueAndDeliverSecurityNotice(
       prisma,
@@ -128,7 +132,11 @@ export async function confirmTwoFactorEnrollmentAction(
     );
   }
 
-  return { status: "confirmed" };
+  // Redirect rather than returning client state: the reissued session
+  // cookie above needs its own fresh request to take effect, and an
+  // explicit redirect (unlike a plain returned state) sends the browser
+  // there instead of re-rendering this page against the now-stale cookie.
+  redirect("/settings/security");
 }
 
 export type ChangePasswordState =

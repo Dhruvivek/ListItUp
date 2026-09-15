@@ -4,20 +4,27 @@ import { prisma } from "@/lib/prisma";
 import { requireAuthenticatedSession } from "@/lib/session/require-authenticated-session";
 
 import {
+  addItemAction,
   addListMemberAction,
   addSectionAction,
   duplicateSectionAction,
   deleteSectionAction,
   grantGuestAccessAction,
+  moveItemToColumnAction,
   moveSectionAction,
   removeListMemberAction,
   renameSectionAction,
+  restoreItemAction,
   revokeGuestAccessAction,
+  setBoardGroupByAction,
   setListGroupByAction,
   updateListDescriptionAction,
 } from "./actions";
+import { BoardView } from "./BoardView";
+import { FilesView } from "./FilesView";
 import { loadListPageData, type ListPageData } from "./page-data";
 import { SectionList } from "./SectionList";
+import { TimelineView } from "./TimelineView";
 
 type Props = {
   params: Promise<{ workspaceId: string; listId: string }>;
@@ -51,14 +58,11 @@ function isTabKey(value: string): value is TabKey {
   return TAB_KEYS.includes(value);
 }
 
-// #29, #31, #32, #36, #33 respectively — these views ship in their own
-// tickets. Dashboard and Messages are this spec's deliberately reserved
-// placeholders (Reports & Analytics, and the v2 Chat/VC work).
-const TAB_NOTES: Record<Exclude<TabKey, "overview" | "list">, string> = {
-  board: "Board view ships in its own ticket (#31).",
+// Calendar ships in its own ticket (#32). Dashboard and Messages are this
+// spec's deliberately reserved placeholders (Reports & Analytics, and the
+// v2 Chat/VC work).
+const TAB_NOTES: Record<Exclude<TabKey, "overview" | "list" | "board" | "timeline" | "files">, string> = {
   calendar: "Calendar view ships in its own ticket (#32).",
-  files: "Files view ships in its own ticket (#36).",
-  timeline: "Timeline view ships in its own ticket (#33).",
   dashboard: "Reserved — Dashboard content ships with the Reports & Analytics spec.",
   messages: "Reserved — Messages ships with the v2 Chat/VC system.",
 };
@@ -249,6 +253,10 @@ export default async function ListPage({ params, searchParams }: Props) {
   const boundMoveSection = (sectionId: string, direction: "up" | "down") =>
     moveSectionAction.bind(null, workspaceId, listId, sectionId, direction);
   const boundSetGroupBy = setListGroupByAction.bind(null, workspaceId, listId);
+  const boundAddItem = (sectionId: string | null) => addItemAction.bind(null, workspaceId, listId, sectionId);
+  const boundSetBoardGroupBy = setBoardGroupByAction.bind(null, workspaceId, listId);
+  const boundMoveItem = moveItemToColumnAction.bind(null, workspaceId, listId, data.boardGroupBy);
+  const boundRestoreItem = (itemId: string) => restoreItemAction.bind(null, workspaceId, listId, itemId);
 
   return (
     <main className="min-h-screen bg-[#080808] px-6 py-12 text-neutral-300">
@@ -293,15 +301,37 @@ export default async function ListPage({ params, searchParams }: Props) {
         ) : activeTab === "list" ? (
           <SectionList
             sections={data.sections}
+            unsectionedItems={data.unsectionedItems}
+            archivedItems={data.archivedItems}
             canManage={data.canManageSections}
             groupBy={data.groupBy}
+            workspaceId={workspaceId}
+            listId={listId}
             boundAddSection={boundAddSection}
             boundRenameSection={boundRenameSection}
             boundDuplicateSection={boundDuplicateSection}
             boundDeleteSection={boundDeleteSection}
             boundMoveSection={boundMoveSection}
             boundSetGroupBy={boundSetGroupBy}
+            boundAddItem={boundAddItem}
+            boundRestoreItem={boundRestoreItem}
           />
+        ) : activeTab === "board" ? (
+          <BoardView
+            columns={data.boardColumns}
+            groupBy={data.boardGroupBy}
+            canManage={data.canManageSections}
+            workspaceId={workspaceId}
+            listId={listId}
+            archivedItems={data.archivedItems}
+            boundSetGroupBy={boundSetBoardGroupBy}
+            boundMoveItem={boundMoveItem}
+            boundRestoreItem={boundRestoreItem}
+          />
+        ) : activeTab === "timeline" ? (
+          <TimelineView items={data.timelineItems} workspaceId={workspaceId} listId={listId} />
+        ) : activeTab === "files" ? (
+          <FilesView entries={data.filesViewEntries} workspaceId={workspaceId} listId={listId} />
         ) : (
           <div className="mt-10 rounded-lg border border-dashed border-neutral-800 px-4 py-16 text-center text-sm text-neutral-600">
             {TAB_NOTES[activeTab]}

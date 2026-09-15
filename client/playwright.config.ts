@@ -11,7 +11,11 @@ export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
   workers: 1,
+  // These journeys chain several real network round trips (Mailpit polling,
+  // password hashing, Redis-backed rate limits) and, in dev mode, on-demand
+  // route compilation — longer than the 30s/5s defaults comfortably cover.
   timeout: 60_000,
+  expect: { timeout: 15_000 },
   reporter: [["list"], ["html", { open: "never" }]],
   use: { baseURL, trace: "retain-on-failure", screenshot: "only-on-failure" },
   webServer: [

@@ -4,6 +4,7 @@ import { signUpAndVerify, uniqueTestUser } from "./support/auth-flows";
 import { pageAlert } from "./support/locators";
 
 const WRONG_PASSWORD = "definitely-the-wrong-password";
+const FAILURES_TO_TRIGGER_RESTRICTION = 5;
 
 test("repeated password failures temporarily restrict sign-in, even with the correct password", async ({
   page,
@@ -14,7 +15,7 @@ test("repeated password failures temporarily restrict sign-in, even with the cor
   await page.context().clearCookies();
   await page.goto("/sign-in");
 
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  for (let attempt = 0; attempt < FAILURES_TO_TRIGGER_RESTRICTION; attempt += 1) {
     await page.getByLabel("Email").fill(user.email);
     await page.getByRole("textbox", { name: "Password" }).fill(WRONG_PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();

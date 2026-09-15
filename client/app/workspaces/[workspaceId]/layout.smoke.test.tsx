@@ -1,0 +1,109 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+
+import { loadWorkspaceNavData } from "./layout-data";
+
+async function run() {
+  if (!process.env.DATABASE_URL) {
+    console.log("workspace layout smoke test skipped: DATABASE_URL is not set");
+    return;
+  }
+
+  const [{ PrismaPg }, { PrismaClient }] = await Promise.all([
+    import("@prisma/adapter-pg"),
+    import("@/generated/prisma/client"),
+  ]);
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  });
+
+  const createdUserIds: string[] = [];
+  const createdWorkspaceIds: string[] = [];
+
+  async function createUser(): Promise<string> {
+    const userId = randomUUID();
+    createdUserIds.push(userId);
+    await prisma.user.create({
+      data: { id: userId, name: "Test User", email: `workspace-layout-${userId}@example.test` },
+    });
+    return userId;
+  }
+
+  async function createWorkspace(
+    kind: "SHARED" | "PERSONAL",
+    name: string,
+    memberUserId?: string
+  ): Promise<string> {
+    const workspaceId = randomUUID();
+    createdWorkspaceIds.push(workspaceId);
+    await prisma.workspace.create({
+      data: {
+        id: workspaceId,
+        name,
+        kind,
+        members: memberUserId
+          ? { create: [{ id: randomUUID(), userId: memberUserId, role: "MEMBER" }] }
+          : undefined,
+      },
+    });
+    return workspaceId;
+  }
+
+  try {
+    // A SHARED Workspace with a membership row appears in the switcher; a
+    // SHARED Workspace with no membership row never does; and the User's
+    // PERSONAL container is populated only into the Personal Space slot,
+    // never the switcher — and vice versa.
+    {
+      const userId = await createUser();
+      const memberSharedId = await createWorkspace("SHARED", "Acme Studio", userId);
+      await createWorkspace("SHARED", "Outsider Co");
+      const personalId = await createWorkspace("PERSONAL", "Personal Space", userId);
+
+      const data = await loadWorkspaceNavData(prisma, userId);
+
+      assert.deepEqual(
+        data.switchableWorkspaces.map((workspace) => workspace.id),
+        [memberSharedId],
+        "the switcher must list only SHARED Workspaces the User belongs to"
+      );
+      assert.ok(
+        !data.switchableWorkspaces.some((workspace) => workspace.id === personalId),
+        "the User's PERSONAL container must never appear in the switcher"
+      );
+
+      assert.ok(data.personalSpace, "expected a Personal Space for a member of one");
+      assert.equal(data.personalSpace!.id, personalId);
+      assert.notEqual(
+        data.personalSpace!.id,
+        memberSharedId,
+        "a SHARED-kind container must never appear in the Personal Space slot"
+      );
+    }
+
+    // A User with no PERSONAL container of their own gets a null Personal
+    // Space slot rather than one borrowed from a SHARED Workspace.
+    {
+      const userId = await createUser();
+      await createWorkspace("SHARED", "Shared Only Co", userId);
+
+      const data = await loadWorkspaceNavData(prisma, userId);
+
+      assert.equal(data.personalSpace, null);
+    }
+  } finally {
+    await prisma.workspaceMember.deleteMany({
+      where: { workspaceId: { in: createdWorkspaceIds } },
+    });
+    await prisma.workspace.deleteMany({ where: { id: { in: createdWorkspaceIds } } });
+    await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+    await prisma.$disconnect();
+  }
+
+  console.log("workspace layout smoke test passed");
+}
+
+void run().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});

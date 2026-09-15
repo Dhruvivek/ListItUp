@@ -1,0 +1,1161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ListItUp — Interactive Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<link rel="stylesheet" href="../shared/theme.css" />
+<style>
+  body { background: var(--bg-0); }
+  .widget-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
+  .why-tag { font-family: var(--font-mono); font-size: 9.5px; letter-spacing:.06em; color: var(--ink-faint); }
+  .stat-num { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+
+  /* screens / tab panels */
+  .screen { display: none; }
+  .screen.active { display: block; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* dropdowns */
+  .dd-wrap { position: relative; }
+  .dropdown-menu {
+    display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+    min-width: 200px; background: var(--bg-2); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md); padding: 4px; box-shadow: 0 12px 32px rgba(0,0,0,.5);
+  }
+  .dropdown-menu.right { left: auto; right: 0; }
+  .dd-wrap.open .dropdown-menu { display: block; }
+  .dd-wrap.open .dd-trigger { border-color: var(--orange); color: var(--ink); }
+  .dropdown-item {
+    display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 6px;
+    font-size: 12.5px; color: var(--ink-muted); cursor: pointer; transition: background .1s ease;
+  }
+  .dropdown-item:hover { background: var(--bg-3); color: var(--ink); }
+  .dropdown-item.selected { color: var(--orange-light); }
+  .dropdown-item svg { width: 13px; height: 13px; flex-shrink: 0; }
+  .dropdown-divider { height: 1px; background: var(--border); margin: 4px 2px; }
+  .dropdown-note { padding: 7px 9px; font-size: 11px; color: var(--ink-faint); }
+
+  /* section collapse */
+  .ln-section .chevron { transition: transform .15s ease; }
+  .ln-section.collapsed .chevron { transform: rotate(-90deg); }
+  .ln-section.collapsed .item-row { display: none; }
+  .ln-section.empty-hidden { display: none; }
+
+  /* rows */
+  .section-head { display:flex; align-items:center; gap:8px; padding:10px 10px; cursor:pointer; }
+  .item-row { display:flex; align-items:center; gap:10px; padding:8px 10px 8px 30px; border-radius:8px; transition: background .12s ease; cursor:pointer; }
+  .item-row:hover { background: var(--bg-3); }
+  .item-row.selected { background: var(--orange-dim); }
+  .item-row.is-complete .row-title { text-decoration: line-through; color: var(--ink-faint) !important; }
+  .facet-icon { display:flex; align-items:center; gap:3px; font-size:11px; color: var(--ink-faint); font-family: var(--font-mono); }
+  .facet-icon svg { width:12px; height:12px; }
+  .group-label { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; }
+  .row { display:flex; align-items:center; gap:12px; padding:9px 10px; border-radius:8px; transition: background .12s ease; }
+  .row:hover { background: var(--bg-3); }
+  .row.hidden-by-filter { display: none; }
+  .row.just-added { animation: flashIn .8s ease; }
+  @keyframes flashIn { 0% { background: var(--orange-dim); } 100% { background: transparent; } }
+
+  /* drawer */
+  .drawer { background: var(--bg-1); border-left: 1px solid var(--border); width: 380px; flex-shrink: 0; overflow-y:auto; }
+  .field-label { font-family: var(--font-mono); font-size: 10.5px; letter-spacing:.08em; text-transform:uppercase; color: var(--ink-faint); }
+  .state-pill { font-size:11.5px; font-weight:600; padding:5px 10px; border-radius:999px; border:1px solid var(--border-strong); color:var(--ink-muted); cursor:pointer; transition: all .12s ease; }
+  .state-pill.active-todo { border-color: var(--ink-muted); color: var(--ink); background: var(--bg-3); }
+  .state-pill.active-progress { border-color: var(--blue); color: var(--blue); background: var(--blue-dim); }
+  .state-pill.active-blocked { border-color: var(--amber); color: var(--amber); background: var(--amber-dim); }
+  .state-pill.active-complete { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+
+  /* toggle */
+  .toggle { width: 34px; height: 19px; border-radius: 999px; background: var(--bg-4); border: 1px solid var(--border-strong); position: relative; cursor: pointer; flex-shrink:0; }
+  .toggle .knob { width: 13px; height: 13px; border-radius: 999px; background: var(--ink-muted); position: absolute; top: 2px; left: 2px; transition: all .15s ease; }
+  .toggle.on { background: var(--orange-dim); border-color: var(--orange); }
+  .toggle.on .knob { left: 17px; background: var(--orange); }
+
+  /* toast */
+  #toast-stack { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
+  .toast {
+    background: var(--bg-2); border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+    padding: 10px 14px; font-size: 12.5px; color: var(--ink); box-shadow: 0 12px 32px rgba(0,0,0,.5);
+    display: flex; align-items: center; gap: 8px; animation: toastIn .18s ease;
+    max-width: 320px;
+  }
+  .toast svg { width: 14px; height: 14px; color: var(--orange-light); flex-shrink: 0; }
+  @keyframes toastIn { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: translateY(0); } }
+
+  .stub-card { padding: 48px 32px; text-align:center; }
+
+  .hm-cell { width: 11px; height: 11px; border-radius: 2.5px; }
+</style>
+</head>
+<body>
+
+<div class="ln-shell">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="ln-sidebar">
+    <div class="dd-wrap mb-2">
+      <div class="ln-workspace-switcher dd-trigger" data-dropdown="dd-workspace">
+        <div id="ws-avatar" class="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold" style="background:var(--orange); color:#1a0800; font-family:var(--font-mono);">AS</div>
+        <div class="flex-1 min-w-0">
+          <div id="ws-name" class="text-[13px] font-semibold truncate" style="color:var(--ink)">Acme Studio</div>
+          <div class="font-mono-label text-[9px]" style="color:var(--ink-faint)">Workspace</div>
+        </div>
+        <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5" style="color:var(--ink-faint)"></i>
+      </div>
+      <div class="dropdown-menu" id="dd-workspace" style="width:100%;min-width:230px">
+        <div class="dropdown-item selected" data-ws="AS|Acme Studio"><i data-lucide="check" style="visibility:visible"></i> Acme Studio</div>
+        <div class="dropdown-item" data-ws="NL|North Line Co-op"><i data-lucide="building-2"></i> North Line Co-op</div>
+        <div class="dropdown-item" data-ws="HT|Harborview Transit"><i data-lucide="building-2"></i> Harborview Transit</div>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-note">Personal Space isn't listed here — it's always pinned below, never sourced from this switcher.</div>
+      </div>
+    </div>
+
+    <nav class="mt-2" id="sidebar-nav">
+      <div class="ln-nav-item active" data-screen="home"><i data-lucide="home"></i> Home</div>
+      <div class="ln-nav-item" data-screen="my-tasks"><i data-lucide="list-checks"></i> My Tasks</div>
+      <div class="ln-nav-item" data-screen="stub" data-stub-title="Updates" data-stub-note="Activity / Bookmarks / Archive / @Mentioned tabs + notification preferences — not in this design-mock batch yet (#47–49).">
+        <i data-lucide="bell"></i> Updates <span class="ln-nav-badge" id="updates-badge">6</span>
+      </div>
+    </nav>
+
+    <div class="ln-nav-section-label" style="padding-top:16px">Lists</div>
+    <div class="ln-nav-item" data-screen="list" data-list-name="Platform Retrofit — Phase 2">
+      <i data-lucide="layout-list"></i> Platform Retrofit — Phase 2
+    </div>
+    <div class="ln-nav-item" data-screen="list" data-list-name="Client Deliverables">
+      <i data-lucide="layout-list"></i> Client Deliverables
+    </div>
+    <div class="ln-nav-item" data-screen="list" data-list-name="Vendor Onboarding">
+      <i data-lucide="layout-list"></i> Vendor Onboarding
+    </div>
+
+    <div class="ln-nav-section-label flex items-center gap-1 cursor-pointer" id="personal-space-toggle">
+      <i data-lucide="chevron-right" class="w-3 h-3 chevron"></i> Personal Space
+    </div>
+    <div id="personal-space-items" style="display:none">
+      <div class="ln-nav-item" data-screen="stub" data-stub-title="Personal Space — Inbox" data-stub-note="Your private Inbox List — not in this design-mock batch yet.">
+        <i data-lucide="inbox"></i> Inbox
+      </div>
+      <div class="ln-nav-item" data-screen="stub" data-stub-title="Personal Space — Notes" data-stub-note="Personal scratch List — not in this design-mock batch yet.">
+        <i data-lucide="sticky-note"></i> Notes
+      </div>
+    </div>
+
+    <div class="mt-auto pt-4 border-t" style="border-color:var(--border)">
+      <div class="ln-nav-item" data-screen="stub" data-stub-title="Profile" data-stub-note="Avatar, Display Name, About Me — a pure identity surface, no work widgets. Not in this design-mock batch yet (#40).">
+        <div class="ln-avatar" style="background:var(--blue)">RK</div> Riya Kapoor
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <div class="flex min-w-0" style="width:100%">
+    <div class="ln-main flex-1 min-w-0">
+
+      <header class="ln-topbar">
+        <div class="flex items-center gap-2 min-w-0">
+          <span id="topbar-label" class="text-[13px] font-semibold truncate" style="color:var(--ink)">Home</span>
+        </div>
+
+        <div class="flex items-center gap-3" id="topbar-actions-home" data-show-on="home,my-tasks,stub">
+          <button class="ln-icon-btn" data-toast="Search — try it from a List's toolbar" data-toast-icon="search"><i data-lucide="search"></i></button>
+          <button class="ln-icon-btn" data-screen-jump="stub" data-stub-title="Updates" data-stub-note="Activity / Bookmarks / Archive / @Mentioned tabs — not in this design-mock batch yet (#47–49)."><i data-lucide="bell"></i></button>
+        </div>
+
+        <div class="flex items-center gap-3" id="topbar-actions-list" data-show-on="list" style="display:none">
+          <div class="flex -space-x-2">
+            <div class="ln-avatar" style="background:var(--orange-light)">RK</div>
+            <div class="ln-avatar" style="background:var(--green)">MT</div>
+            <div class="ln-avatar" style="background:var(--blue)">PS</div>
+          </div>
+          <button class="ln-btn ln-btn-ghost" data-toast="List link copied to clipboard" data-toast-icon="link"><i data-lucide="user-plus"></i> Share</button>
+          <button class="ln-icon-btn" data-toast="List settings — Roles &amp; Guests page not in this batch yet (#28)" data-toast-icon="settings"><i data-lucide="settings"></i></button>
+        </div>
+      </header>
+
+      <div class="ln-content">
+
+        <!-- =========================================================== HOME =========================================================== -->
+        <section id="screen-home" class="screen active max-w-6xl">
+          <div class="mb-10">
+            <div class="font-mono-label text-[11px] mb-2" style="color:var(--orange-light)">Wednesday, September 14</div>
+            <h1 class="text-[32px] font-semibold tracking-tight" style="color:var(--ink)">Good afternoon, Riya</h1>
+            <p class="text-[13px] mt-1" style="color:var(--ink-muted)">2:41 PM — <span id="home-ws-label">Acme Studio</span></p>
+          </div>
+
+          <div class="grid grid-cols-3 gap-5">
+
+            <div class="ln-card col-span-2 p-5">
+              <div class="flex items-center justify-between mb-4">
+                <div class="widget-title">My Tasks — <span class="home-ws-label">Acme Studio</span></div>
+                <a class="text-[12px] font-semibold flex items-center gap-1 cursor-pointer" style="color:var(--orange-light)" data-screen-jump="my-tasks">View all <i data-lucide="arrow-right" class="w-3 h-3"></i></a>
+              </div>
+              <div class="flex flex-col gap-1">
+                <div class="row"><span class="ln-checkbox"></span><span class="row-title text-[13.5px] flex-1" style="color:var(--ink)">Finalize Q3 rail-safety deck for client review</span><span class="ln-badge ln-badge-red">Overdue · Sep 12</span><div class="ln-avatar" style="background:var(--orange-light)">RK</div></div>
+                <div class="row"><span class="ln-checkbox"></span><span class="row-title text-[13.5px] flex-1" style="color:var(--ink)">Review tunnel-clearance calculations from vendor</span><span class="ln-badge ln-badge-amber">Blocked</span><div class="ln-avatar" style="background:var(--orange-light)">RK</div></div>
+                <div class="row"><span class="ln-checkbox"></span><span class="row-title text-[13.5px] flex-1" style="color:var(--ink)">Draft onboarding checklist for new field engineers</span><span class="ln-badge ln-badge-blue">Due Sep 18</span><div class="ln-avatar" style="background:var(--orange-light)">RK</div></div>
+                <div class="row"><span class="ln-checkbox"></span><span class="row-title text-[13.5px] flex-1" style="color:var(--ink)">Tag signage assets for the platform-retrofit list</span><span class="ln-badge ln-badge-muted">No due date</span><div class="ln-avatar" style="background:var(--orange-light)">RK</div></div>
+              </div>
+            </div>
+
+            <div class="ln-card p-5">
+              <div class="widget-title mb-4">Recent Lists</div>
+              <div class="flex flex-col gap-3">
+                <div class="flex items-center gap-3 cursor-pointer group" data-screen-jump="list" data-list-name="Platform Retrofit — Phase 2">
+                  <div class="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style="background:var(--bg-3)"><i data-lucide="layout-list" class="w-4 h-4" style="color:var(--orange-light)"></i></div>
+                  <div class="min-w-0 flex-1"><div class="text-[13px] font-medium truncate" style="color:var(--ink)">Platform Retrofit — Phase 2</div><div class="text-[11.5px]" style="color:var(--ink-faint)">18 items · 62% complete</div></div>
+                </div>
+                <div class="flex items-center gap-3 cursor-pointer group" data-screen-jump="list" data-list-name="Client Deliverables">
+                  <div class="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style="background:var(--bg-3)"><i data-lucide="layout-list" class="w-4 h-4" style="color:var(--orange-light)"></i></div>
+                  <div class="min-w-0 flex-1"><div class="text-[13px] font-medium truncate" style="color:var(--ink)">Client Deliverables</div><div class="text-[11.5px]" style="color:var(--ink-faint)">7 items · 40% complete</div></div>
+                </div>
+                <div class="flex items-center gap-3 cursor-pointer group" data-screen-jump="list" data-list-name="Vendor Onboarding">
+                  <div class="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style="background:var(--bg-3)"><i data-lucide="layout-list" class="w-4 h-4" style="color:var(--orange-light)"></i></div>
+                  <div class="min-w-0 flex-1"><div class="text-[13px] font-medium truncate" style="color:var(--ink)">Vendor Onboarding</div><div class="text-[11.5px]" style="color:var(--ink-faint)">24 items · 88% complete</div></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="ln-card col-span-3 p-5">
+              <div class="flex items-center justify-between mb-4">
+                <div class="widget-title">Items I've Assigned</div>
+                <span class="text-[11px]" style="color:var(--ink-faint)">Created by you, assigned to someone else</span>
+              </div>
+              <div class="grid grid-cols-2 gap-x-8 gap-y-1">
+                <div class="row"><span class="ln-dot" style="background:var(--ink-faint)"></span><span class="row-title text-[13.5px] flex-1 truncate" style="color:var(--ink)">Source replacement bearings for Unit 4</span><div class="ln-avatar" style="background:var(--green)">MT</div><span class="ln-badge ln-badge-blue">Due Sep 20</span></div>
+                <div class="row"><span class="ln-dot" style="background:var(--amber)"></span><span class="row-title text-[13.5px] flex-1 truncate" style="color:var(--ink)">Confirm signage vendor contract terms</span><div class="ln-avatar" style="background:var(--blue)">PS</div><span class="ln-badge ln-badge-amber">Blocked</span></div>
+                <div class="row"><span class="ln-dot" style="background:var(--ink-faint)"></span><span class="row-title text-[13.5px] flex-1 truncate" style="color:var(--ink)">Update platform clearance drawings</span><div class="ln-avatar" style="background:var(--red)">JN</div><span class="ln-badge ln-badge-muted">To do</span></div>
+                <div class="row"><span class="ln-dot" style="background:var(--green)"></span><span class="row-title text-[13.5px] flex-1 truncate" style="color:var(--ink)">Compile inspection checklist for field team</span><div class="ln-avatar" style="background:var(--green)">MT</div><span class="ln-badge ln-badge-green">Complete</span></div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- =========================================================== MY TASKS =========================================================== -->
+        <section id="screen-my-tasks" class="screen">
+
+          <div class="flex items-center gap-6 border-b mb-5" style="border-color:var(--border)" data-tabgroup="mytasks">
+            <div class="ln-tab active" data-tab="mt-list"><i data-lucide="list" class="w-3.5 h-3.5"></i> List</div>
+            <div class="ln-tab" data-tab="mt-board"><i data-lucide="columns-3" class="w-3.5 h-3.5"></i> Board</div>
+            <div class="ln-tab" data-tab="mt-calendar"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> Calendar</div>
+            <div class="ln-tab" data-tab="mt-files"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i> Files</div>
+            <div class="ln-tab" data-tab="mt-dashboard"><i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i> Dashboard <span class="ln-badge ln-badge-muted ml-1">Reserved</span></div>
+          </div>
+
+          <div class="tab-panel active" id="mt-list" data-tabgroup="mytasks">
+
+            <div class="ln-card flex items-center gap-3 px-4 py-3 mb-4">
+              <i data-lucide="plus" class="w-4 h-4" style="color:var(--orange-light)"></i>
+              <input id="quick-add-input" class="flex-1 bg-transparent outline-none text-[13.5px]" style="color:var(--ink)"
+                placeholder="Add a task — try &quot;Fix platform signage tomorrow #retrofit @sam /Client Deliverables&quot; and press Enter" />
+              <span class="ln-badge ln-badge-muted font-mono-label">Quick-Add</span>
+            </div>
+
+            <div class="flex items-center justify-between mb-5">
+              <div class="flex items-center gap-2">
+                <span class="ln-chip active" id="visibility-chip" data-toggle-visibility><i data-lucide="filter" class="w-3 h-3"></i> <span>To Do + Blocked</span></span>
+
+                <div class="dd-wrap">
+                  <span class="ln-chip dd-trigger" data-dropdown="dd-ws-filter">All Workspaces</span>
+                  <div class="dropdown-menu" id="dd-ws-filter">
+                    <div class="dropdown-item selected" data-ws-filter="all">All Workspaces</div>
+                    <div class="dropdown-item" data-ws-filter="Acme Studio">Acme Studio</div>
+                    <div class="dropdown-item" data-ws-filter="North Line Co-op">North Line Co-op</div>
+                  </div>
+                </div>
+
+                <div class="dd-wrap">
+                  <span class="ln-chip dd-trigger" data-dropdown="dd-sort">Sort: <span id="sort-label">Overdue first</span></span>
+                  <div class="dropdown-menu" id="dd-sort">
+                    <div class="dropdown-item selected" data-sort="Overdue first">Overdue first (default)</div>
+                    <div class="dropdown-item" data-sort="Priority">Priority</div>
+                    <div class="dropdown-item" data-sort="Nearest due date">Nearest due date</div>
+                    <div class="dropdown-item" data-sort="Manual">Manual</div>
+                  </div>
+                </div>
+
+                <div class="dd-wrap">
+                  <span class="ln-chip dd-trigger" data-dropdown="dd-group">Group: <span id="group-label">Due date</span></span>
+                  <div class="dropdown-menu" id="dd-group">
+                    <div class="dropdown-item selected" data-group="Due date">Due date (default)</div>
+                    <div class="dropdown-item" data-group="Workspace">Workspace</div>
+                    <div class="dropdown-item" data-group="Priority">Priority</div>
+                    <div class="dropdown-item" data-group="None">None</div>
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button class="ln-icon-btn" data-toast="Searching My Tasks…" data-toast-icon="search"><i data-lucide="search"></i></button>
+                <button class="ln-icon-btn" data-toast="Advanced filters — coming soon" data-toast-icon="sliders-horizontal"><i data-lucide="sliders-horizontal"></i></button>
+                <button class="ln-icon-btn" data-toast="Link copied — opening it still checks the same permissions" data-toast-icon="share-2"><i data-lucide="share-2"></i></button>
+              </div>
+            </div>
+
+            <div class="ln-card p-2" id="mytasks-rows">
+              <div class="group-label px-3 pt-3 pb-2 flex items-center gap-2" style="color:var(--red)"><i data-lucide="alert-triangle" class="w-3 h-3"></i> Overdue</div>
+              <div class="row" data-workspace="Acme Studio"><span class="ln-checkbox"></span><span class="row-title text-[13.5px] flex-1" style="color:var(--ink)">Finalize Q3 rail-safety deck for client review</span><span class="ln-chip">Acme Studio</span><span class="ln-dot" style="background:var(--red)"></span><span class="text-[11.5px] font-mono-label" style="color:var(--red)">High</span><span class="ln-badge ln-badge-red">Sep 12</span><div class="ln-avatar" style="background:var(--orange-light)">RK</div></div>
+              <div class="row" data-workspace="North Line Co-op"><span class="ln-checkbox"></span><span class="row-title text-[13.5px] flex-1" style="color:var(--ink)">Escalate tunnel-clearance discrepancy to vendor</span><span class="ln-chip">North Line Co-op</span><span class="ln-dot" style="background:var(--red)"></span><span class="text-[11.5px] font-mono-label" style="color:var(--red)">High</span><span class="ln-badge ln-badge-red">Sep 13</span><div class="ln-avatar" style="background:var(--orange-light)">RK</div></div>
+
+              <div class="group-label px-3 pt-4 pb-2 flex items-center gap-2" style="color:var(--amber)"><i data-lucide="octagon-pause" class="w-3 h-3"></i> Blocked</div>
+              <div class="row" data-workspace="Acme Studio"><span class="ln-checkbox"></span><span class="row-title text-[13.5px] flex-1" style="color:var(--ink)">Review tunnel-clearance calculations from vendor</span><span class="ln-chip">Acme Studio</span><span class="ln-dot" style="background:var(--amber)"></span><span class="text-[11.5px] font-mono-label" style="color:var(--ink-muted)">Medium</span><span class="ln-badge ln-badge-amber">Awaiting vendor</span><div class="ln-avatar" style="background:var(--orange-light)">RK</div></div>
+
+              <div class="group-label px-3 pt-4 pb-2" style="color:var(--ink-faint)">Today — Sep 14</div>
+              <div class="row" data-workspace="Acme Studio"><span class="ln-checkbox"></span><span class="row-title text-[13.5px] flex-1" style="color:var(--ink)">Sync with field team on inspection checklist</span><span class="ln-chip">Acme Studio</span><span class="ln-dot" style="background:var(--ink-faint)"></span><span class="text-[11.5px] font-mono-label" style="color:var(--ink-muted)">Normal</span><span class="ln-badge ln-badge-blue">Today</span><div class="ln-avatar" style="background:var(--orange-light)">RK</div></div>
+
+              <div class="group-label px-3 pt-4 pb-2" style="color:var(--ink-faint)">Upcoming</div>
+              <div class="row" data-workspace="Acme Studio"><span class="ln-checkbox"></span><span class="row-title text-[13.5px] flex-1" style="color:var(--ink)">Draft onboarding checklist for new field engineers</span><span class="ln-chip">Acme Studio</span><span class="ln-dot" style="background:var(--ink-faint)"></span><span class="text-[11.5px] font-mono-label" style="color:var(--ink-muted)">Normal</span><span class="ln-badge ln-badge-blue">Sep 18</span><div class="ln-avatar" style="background:var(--orange-light)">RK</div></div>
+              <div class="row" data-workspace="North Line Co-op"><span class="ln-checkbox"></span><span class="row-title text-[13.5px] flex-1" style="color:var(--ink)">Prep vendor-onboarding walkthrough deck</span><span class="ln-chip">North Line Co-op</span><span class="ln-dot" style="background:var(--ink-faint)"></span><span class="text-[11.5px] font-mono-label" style="color:var(--ink-muted)">Normal</span><span class="ln-badge ln-badge-blue">Sep 22</span><div class="ln-avatar" style="background:var(--orange-light)">RK</div></div>
+
+              <div class="group-label px-3 pt-4 pb-2" style="color:var(--ink-faint)">No due date</div>
+              <div class="row" data-workspace="Acme Studio"><span class="ln-checkbox"></span><span class="row-title text-[13.5px] flex-1" style="color:var(--ink)">Tag signage assets for the platform-retrofit list</span><span class="ln-chip">Acme Studio</span><span class="ln-dot" style="background:var(--ink-faint)"></span><span class="text-[11.5px] font-mono-label" style="color:var(--ink-muted)">Low</span><span class="ln-badge ln-badge-muted">Undated</span><div class="ln-avatar" style="background:var(--orange-light)">RK</div></div>
+
+              <!-- hidden by default: Complete / Archived — revealed by the visibility chip -->
+              <div class="group-label px-3 pt-4 pb-2 hide-when-focused" style="color:var(--ink-faint)">Complete</div>
+              <div class="row hide-when-focused" data-workspace="Acme Studio"><span class="ln-checkbox checked"><i data-lucide="check"></i></span><span class="row-title text-[13.5px] flex-1" style="color:var(--ink-faint); text-decoration:line-through">Compile inspection checklist for field team</span><span class="ln-chip">Acme Studio</span><span class="ln-badge ln-badge-green">Complete</span><div class="ln-avatar" style="background:var(--orange-light)">RK</div></div>
+              <div class="row hide-when-focused" data-workspace="Acme Studio"><span class="ln-checkbox"></span><span class="row-title text-[13.5px] flex-1" style="color:var(--ink-faint)">Archive Q2 retrospective notes</span><span class="ln-chip">Acme Studio</span><span class="ln-badge ln-badge-muted">Archived</span><div class="ln-avatar" style="background:var(--orange-light)">RK</div></div>
+            </div>
+
+            <p class="text-[11.5px] mt-3" style="color:var(--ink-faint)">Complete and Archived items are hidden by default — click the filter chip above to reveal them.</p>
+          </div>
+
+          <div class="tab-panel" id="mt-board" data-tabgroup="mytasks"><div class="ln-card stub-card"><i data-lucide="columns-3" class="w-6 h-6 mx-auto mb-3" style="color:var(--ink-faint)"></i><div class="text-[13px] font-medium" style="color:var(--ink)">Board view</div><div class="text-[12px] mt-1" style="color:var(--ink-faint)">Reuses the List page's Board grouping mechanism, adapted to this cross-Workspace Item set — not in this design-mock batch yet.</div></div></div>
+          <div class="tab-panel" id="mt-calendar" data-tabgroup="mytasks"><div class="ln-card stub-card"><i data-lucide="calendar" class="w-6 h-6 mx-auto mb-3" style="color:var(--ink-faint)"></i><div class="text-[13px] font-medium" style="color:var(--ink)">Calendar view</div><div class="text-[12px] mt-1" style="color:var(--ink-faint)">Assigned Items placed on their due-date day — not in this design-mock batch yet.</div></div></div>
+          <div class="tab-panel" id="mt-files" data-tabgroup="mytasks"><div class="ln-card stub-card"><i data-lucide="paperclip" class="w-6 h-6 mx-auto mb-3" style="color:var(--ink-faint)"></i><div class="text-[13px] font-medium" style="color:var(--ink)">Files view</div><div class="text-[12px] mt-1" style="color:var(--ink-faint)">Aggregates Attachments across your assigned Items — not in this design-mock batch yet.</div></div></div>
+          <div class="tab-panel" id="mt-dashboard" data-tabgroup="mytasks"><div class="ln-card stub-card"><i data-lucide="bar-chart-3" class="w-6 h-6 mx-auto mb-3" style="color:var(--ink-faint)"></i><div class="text-[13px] font-medium" style="color:var(--ink)">Dashboard — reserved</div><div class="text-[12px] mt-1" style="color:var(--ink-faint)">Ships with the Reports &amp; Analytics spec (#52). This tab is intentionally a placeholder, matching the same reservation pattern as the List page.</div></div></div>
+
+        </section>
+
+        <!-- =========================================================== LIST (view + dashboard combined) =========================================================== -->
+        <section id="screen-list" class="screen">
+
+          <div class="mb-2">
+            <div class="flex items-center gap-2 mb-1">
+              <i data-lucide="layout-list" class="w-4 h-4" style="color:var(--orange-light)"></i>
+              <h1 id="list-title" class="text-[19px] font-semibold" style="color:var(--ink)">Platform Retrofit — Phase 2</h1>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-6 border-b mb-5" style="border-color:var(--border)" data-tabgroup="list">
+            <div class="ln-tab" data-tab="l-overview"><i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i> Overview</div>
+            <div class="ln-tab active" data-tab="l-list"><i data-lucide="list" class="w-3.5 h-3.5"></i> List</div>
+            <div class="ln-tab" data-tab="l-board"><i data-lucide="columns-3" class="w-3.5 h-3.5"></i> Board</div>
+            <div class="ln-tab" data-tab="l-calendar"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> Calendar</div>
+            <div class="ln-tab" data-tab="l-timeline"><i data-lucide="gantt-chart" class="w-3.5 h-3.5"></i> Timeline</div>
+            <div class="ln-tab" data-tab="l-files"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i> Files</div>
+            <div class="ln-tab" data-tab="l-dashboard"><i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i> Dashboard</div>
+            <div class="ln-tab disabled" data-toast="Messages ships in v2 — not built here" data-toast-icon="message-square"><i data-lucide="message-square" class="w-3.5 h-3.5"></i> Messages <span class="ln-badge ln-badge-muted ml-1">v2</span></div>
+          </div>
+
+          <div class="tab-panel" id="l-overview" data-tabgroup="list"><div class="ln-card stub-card"><i data-lucide="layout-dashboard" class="w-6 h-6 mx-auto mb-3" style="color:var(--ink-faint)"></i><div class="text-[13px] font-medium" style="color:var(--ink)">Overview tab</div><div class="text-[12px] mt-1" style="color:var(--ink-faint)">Not in this design-mock batch yet (#27).</div></div></div>
+
+          <!-- ===== List tab ===== -->
+          <div class="tab-panel active" id="l-list" data-tabgroup="list">
+            <div class="flex min-w-0 gap-5">
+              <div class="flex-1 min-w-0">
+
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center gap-2">
+                    <button class="ln-btn ln-btn-primary" id="add-section-btn"><i data-lucide="plus"></i> Add Section</button>
+
+                    <div class="dd-wrap">
+                      <span class="ln-chip dd-trigger" data-dropdown="dd-rule"><i data-lucide="git-branch" class="w-3 h-3"></i> Add Rule: grouped by <span id="rule-label">Section</span></span>
+                      <div class="dropdown-menu" id="dd-rule">
+                        <div class="dropdown-item selected" data-rule="Section">Section (default)</div>
+                        <div class="dropdown-item" data-rule="Assignee">Assignee</div>
+                        <div class="dropdown-item" data-rule="Priority">Priority</div>
+                        <div class="dropdown-item" data-rule="State">State</div>
+                        <div class="dropdown-item" data-rule="Due date">Due date</div>
+                      </div>
+                    </div>
+
+                    <span class="ln-chip" id="hide-empty-chip"><i data-lucide="eye-off" class="w-3 h-3"></i> Hide empty Sections</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button class="ln-icon-btn" data-toast="Searching this List…" data-toast-icon="search"><i data-lucide="search"></i></button>
+                    <button class="ln-icon-btn" data-toast="Advanced filters — coming soon" data-toast-icon="sliders-horizontal"><i data-lucide="sliders-horizontal"></i></button>
+                  </div>
+                </div>
+
+                <div class="ln-card p-2" id="sections-container">
+
+                  <div class="ln-section" data-section-id="design">
+                    <div class="section-head">
+                      <i data-lucide="chevron-down" class="w-3.5 h-3.5 chevron" style="color:var(--ink-faint)"></i>
+                      <span class="text-[13px] font-semibold section-name" style="color:var(--ink)">Design & Specification</span>
+                      <span class="ln-badge ln-badge-muted section-count">4</span>
+                      <div class="flex-1"></div>
+                      <div class="dd-wrap" onclick="event.stopPropagation()">
+                        <button class="ln-icon-btn dd-trigger" style="width:26px;height:26px" data-dropdown="dd-sec-design"><i data-lucide="more-horizontal" class="w-3.5 h-3.5"></i></button>
+                        <div class="dropdown-menu right" id="dd-sec-design">
+                          <div class="dropdown-item" data-sec-action="rename"><i data-lucide="pencil"></i> Rename Section</div>
+                          <div class="dropdown-item" data-sec-action="duplicate"><i data-lucide="copy"></i> Duplicate Section</div>
+                          <div class="dropdown-divider"></div>
+                          <div class="dropdown-item" data-sec-action="up"><i data-lucide="arrow-up"></i> Move Up</div>
+                          <div class="dropdown-item" data-sec-action="down"><i data-lucide="arrow-down"></i> Move Down</div>
+                          <div class="dropdown-divider"></div>
+                          <div class="dropdown-item" data-sec-action="delete" style="color:var(--red)"><i data-lucide="trash-2"></i> Delete Section</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="item-row" data-item-id="item-1">
+                      <span class="ln-checkbox"></span>
+                      <span class="ln-dot" style="background:var(--red)"></span>
+                      <span class="row-title text-[13.5px] flex-1" style="color:var(--ink)">Review tunnel-clearance calculations from vendor</span>
+                      <span class="ln-chip">Structural</span>
+                      <span class="ln-chip">Vendor: North Line</span>
+                      <span class="facet-icon"><i data-lucide="link-2"></i>2</span>
+                      <span class="facet-icon"><i data-lucide="message-square"></i>3</span>
+                      <span class="facet-icon"><i data-lucide="paperclip"></i>1</span>
+                      <div class="flex -space-x-1.5"><div class="ln-avatar" style="width:20px;height:20px;font-size:9px;background:var(--orange-light)">RK</div></div>
+                      <span class="ln-badge ln-badge-amber row-badge">Blocked</span>
+                    </div>
+
+                    <div class="item-row" data-item-id="item-2">
+                      <span class="ln-checkbox"></span>
+                      <span class="ln-dot" style="background:var(--ink-faint)"></span>
+                      <span class="row-title text-[13.5px] flex-1" style="color:var(--ink)">Draft revised platform edge drawings</span>
+                      <span class="ln-chip">Structural</span>
+                      <span class="facet-icon"><i data-lucide="link-2"></i>1</span>
+                      <span class="facet-icon"><i data-lucide="message-square"></i>0</span>
+                      <div class="flex -space-x-1.5"><div class="ln-avatar" style="width:20px;height:20px;font-size:9px;background:var(--green)">MT</div></div>
+                      <span class="ln-badge ln-badge-blue row-badge">Sep 19</span>
+                    </div>
+
+                    <div class="item-row is-complete" data-item-id="item-3">
+                      <span class="ln-checkbox checked"><i data-lucide="check"></i></span>
+                      <span class="ln-dot" style="background:var(--green)"></span>
+                      <span class="row-title text-[13.5px] flex-1" style="color:var(--ink-faint); text-decoration:line-through">Confirm signage placement with accessibility consultant</span>
+                      <span class="ln-chip">Accessibility</span>
+                      <div class="flex -space-x-1.5"><div class="ln-avatar" style="width:20px;height:20px;font-size:9px;background:var(--blue)">PS</div></div>
+                      <span class="ln-badge ln-badge-green row-badge">Complete</span>
+                    </div>
+
+                    <div class="item-row" data-item-id="item-3a" style="padding-left:52px">
+                      <span class="ln-checkbox"></span>
+                      <span class="row-title text-[13px] flex-1" style="color:var(--ink-muted)">↳ Circulate drawing revision to stakeholders</span>
+                      <div class="ln-avatar" style="width:20px;height:20px;font-size:9px;background:var(--orange-light)">RK</div>
+                      <span class="ln-badge ln-badge-muted row-badge">To do</span>
+                    </div>
+                  </div>
+
+                  <div class="ln-section" data-section-id="procurement">
+                    <div class="section-head">
+                      <i data-lucide="chevron-down" class="w-3.5 h-3.5 chevron" style="color:var(--ink-faint)"></i>
+                      <span class="text-[13px] font-semibold section-name" style="color:var(--ink)">Procurement</span>
+                      <span class="ln-badge ln-badge-muted section-count">2</span>
+                      <div class="flex-1"></div>
+                      <div class="dd-wrap" onclick="event.stopPropagation()">
+                        <button class="ln-icon-btn dd-trigger" style="width:26px;height:26px" data-dropdown="dd-sec-procurement"><i data-lucide="more-horizontal" class="w-3.5 h-3.5"></i></button>
+                        <div class="dropdown-menu right" id="dd-sec-procurement">
+                          <div class="dropdown-item" data-sec-action="rename"><i data-lucide="pencil"></i> Rename Section</div>
+                          <div class="dropdown-item" data-sec-action="duplicate"><i data-lucide="copy"></i> Duplicate Section</div>
+                          <div class="dropdown-divider"></div>
+                          <div class="dropdown-item" data-sec-action="up"><i data-lucide="arrow-up"></i> Move Up</div>
+                          <div class="dropdown-item" data-sec-action="down"><i data-lucide="arrow-down"></i> Move Down</div>
+                          <div class="dropdown-divider"></div>
+                          <div class="dropdown-item" data-sec-action="delete" style="color:var(--red)"><i data-lucide="trash-2"></i> Delete Section</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="item-row" data-item-id="item-4">
+                      <span class="ln-checkbox"></span>
+                      <span class="ln-dot" style="background:var(--red)"></span>
+                      <span class="row-title text-[13.5px] flex-1" style="color:var(--ink)">Source replacement bearings for Unit 4</span>
+                      <span class="ln-chip">Priority: High</span>
+                      <div class="ln-avatar" style="width:20px;height:20px;font-size:9px;background:var(--green)">MT</div>
+                      <span class="ln-badge ln-badge-blue row-badge">Sep 20</span>
+                    </div>
+
+                    <div class="item-row" data-item-id="item-5">
+                      <span class="ln-checkbox"></span>
+                      <span class="ln-dot" style="background:var(--ink-faint)"></span>
+                      <span class="row-title text-[13.5px] flex-1" style="color:var(--ink)">Compare vendor quotes for platform sealant</span>
+                      <div class="ln-avatar" style="width:20px;height:20px;font-size:9px;background:var(--green)">MT</div>
+                      <span class="ln-badge ln-badge-muted row-badge">Undated</span>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              <!-- ===== item detail drawer ===== -->
+              <aside class="drawer hidden" id="item-drawer">
+                <div class="p-5 flex items-center justify-between border-b" style="border-color:var(--border)">
+                  <span class="font-mono-label text-[10.5px]" id="drawer-section-label" style="color:var(--ink-faint)">Item · Design & Specification</span>
+                  <button class="ln-icon-btn" id="drawer-close" style="width:26px;height:26px"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+                </div>
+
+                <div class="p-5">
+                  <h2 class="text-[17px] font-semibold leading-snug mb-4" id="drawer-title" style="color:var(--ink)">Review tunnel-clearance calculations from vendor</h2>
+
+                  <div class="mb-5">
+                    <div class="field-label mb-2">State</div>
+                    <div class="flex flex-wrap gap-1.5" id="drawer-state-pills">
+                      <span class="state-pill" data-state="todo">To Do</span>
+                      <span class="state-pill" data-state="progress">In Progress</span>
+                      <span class="state-pill" data-state="blocked">Blocked</span>
+                      <span class="state-pill" data-state="complete">Complete</span>
+                    </div>
+                    <div class="mt-2 p-2.5 rounded-md text-[12.5px]" id="drawer-blocker-box" style="background:var(--amber-dim); color:var(--amber); border:1px solid rgba(245,182,66,.25)">
+                      <span class="font-semibold">Blocker reason —</span> <span id="drawer-blocker-text">awaiting revised load tables from North Line structural team.</span>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-4 mb-5">
+                    <div><div class="field-label mb-2">Assignees</div><div class="flex items-center gap-1.5"><div class="ln-avatar" style="background:var(--orange-light)">RK</div><button class="ln-icon-btn" style="width:24px;height:24px" data-toast="Add Assignee — pick any List Member"><i data-lucide="plus" class="w-3 h-3"></i></button></div></div>
+                    <div><div class="field-label mb-2">Priority</div><span class="ln-badge ln-badge-red" id="drawer-priority">High</span></div>
+                    <div><div class="field-label mb-2">Due date</div><span class="text-[13px]" id="drawer-due" style="color:var(--ink)">Sep 16, 2026</span></div>
+                    <div><div class="field-label mb-2">Created by</div><span class="text-[13px]" id="drawer-created-by" style="color:var(--ink)">Maya Torres</span></div>
+                  </div>
+
+                  <div class="mb-5">
+                    <div class="field-label mb-2">Labels</div>
+                    <div class="flex flex-wrap gap-1.5" id="drawer-labels">
+                      <span class="ln-chip active">Structural</span>
+                      <span class="ln-chip">Vendor: North Line</span>
+                      <button class="ln-icon-btn" style="width:24px;height:24px" data-toast="Apply an existing Label — any List Member can do this"><i data-lucide="plus" class="w-3 h-3"></i></button>
+                    </div>
+                  </div>
+
+                  <div class="mb-5">
+                    <div class="field-label mb-2">Custom Fields</div>
+                    <div class="flex flex-col gap-2" id="drawer-fields">
+                      <div class="flex items-center justify-between text-[13px]"><span style="color:var(--ink-muted)">Inspection ref #</span><span style="color:var(--ink)" class="font-mono-label normal-case">TX-4471</span></div>
+                      <div class="flex items-center justify-between text-[13px]"><span style="color:var(--ink-muted)">Clearance (mm)</span><span style="color:var(--ink)" class="font-mono-label normal-case">1,240</span></div>
+                      <div class="flex items-center justify-between text-[13px]"><span style="color:var(--ink-muted)">Review status</span><span class="ln-badge ln-badge-amber">Needs revision</span></div>
+                    </div>
+                  </div>
+
+                  <div class="mb-5">
+                    <div class="field-label mb-2">Dependencies</div>
+                    <div class="flex flex-col" id="drawer-deps">
+                      <div class="flex items-center gap-2 text-[13px] py-1.5"><i data-lucide="arrow-left" class="w-3.5 h-3.5" style="color:var(--ink-faint)"></i><span style="color:var(--ink-muted)">Blocked by</span><span style="color:var(--ink)" class="truncate">Vendor load-table resubmission</span></div>
+                      <div class="flex items-center gap-2 text-[13px] py-1.5"><i data-lucide="arrow-right" class="w-3.5 h-3.5" style="color:var(--ink-faint)"></i><span style="color:var(--ink-muted)">Blocks</span><span style="color:var(--ink)" class="truncate">Draft revised platform edge drawings</span></div>
+                    </div>
+                  </div>
+
+                  <div class="mb-5">
+                    <div class="field-label mb-2">Notes</div>
+                    <div class="flex flex-col gap-3" id="drawer-notes">
+                      <div class="flex gap-2">
+                        <div class="ln-avatar flex-shrink-0" style="background:var(--green)">MT</div>
+                        <div class="text-[13px]" style="color:var(--ink-muted)">
+                          <span style="color:var(--ink)" class="font-medium">Maya Torres</span> — Flagged this to
+                          <span style="color:var(--orange-light)">@Riya Kapoor</span> since the vendor numbers don't match our survey.
+                          <div class="text-[11px] mt-0.5" style="color:var(--ink-faint)">Sep 13, 4:02 PM</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2 mt-3">
+                      <input id="drawer-note-input" class="flex-1 bg-transparent outline-none text-[12.5px] px-2.5 py-2 rounded-md" style="color:var(--ink); border:1px solid var(--border-strong)" placeholder="Add a note — try @riya" />
+                      <button class="ln-icon-btn" id="drawer-note-send" style="width:30px;height:30px"><i data-lucide="send" class="w-3.5 h-3.5"></i></button>
+                    </div>
+                  </div>
+
+                  <div class="mb-2 p-3 rounded-md" style="background:var(--bg-3); border:1px dashed var(--border-strong)">
+                    <div class="field-label mb-1.5 flex items-center gap-1.5"><i data-lucide="lock" class="w-3 h-3"></i> Personal note — only visible to you</div>
+                    <p class="text-[12.5px]" id="drawer-personal-note" style="color:var(--ink-muted)">Call North Line directly Monday AM if revised tables aren't in by then.</p>
+                  </div>
+
+                </div>
+              </aside>
+            </div>
+          </div>
+
+          <div class="tab-panel" id="l-board" data-tabgroup="list"><div class="ln-card stub-card"><i data-lucide="columns-3" class="w-6 h-6 mx-auto mb-3" style="color:var(--ink-faint)"></i><div class="text-[13px] font-medium" style="color:var(--ink)">Board view</div><div class="text-[12px] mt-1" style="color:var(--ink-faint)">Not in this design-mock batch yet (#31).</div></div></div>
+          <div class="tab-panel" id="l-calendar" data-tabgroup="list"><div class="ln-card stub-card"><i data-lucide="calendar" class="w-6 h-6 mx-auto mb-3" style="color:var(--ink-faint)"></i><div class="text-[13px] font-medium" style="color:var(--ink)">Calendar view</div><div class="text-[12px] mt-1" style="color:var(--ink-faint)">Not in this design-mock batch yet (#32).</div></div></div>
+          <div class="tab-panel" id="l-timeline" data-tabgroup="list"><div class="ln-card stub-card"><i data-lucide="gantt-chart" class="w-6 h-6 mx-auto mb-3" style="color:var(--ink-faint)"></i><div class="text-[13px] font-medium" style="color:var(--ink)">Timeline view</div><div class="text-[12px] mt-1" style="color:var(--ink-faint)">Not in this design-mock batch yet (#33).</div></div></div>
+          <div class="tab-panel" id="l-files" data-tabgroup="list"><div class="ln-card stub-card"><i data-lucide="paperclip" class="w-6 h-6 mx-auto mb-3" style="color:var(--ink-faint)"></i><div class="text-[13px] font-medium" style="color:var(--ink)">Files view</div><div class="text-[12px] mt-1" style="color:var(--ink-faint)">Not in this design-mock batch yet (#36).</div></div></div>
+
+          <!-- ===== Dashboard tab ===== -->
+          <div class="tab-panel" id="l-dashboard" data-tabgroup="list">
+
+            <div class="flex justify-end mb-4">
+              <button class="ln-btn ln-btn-ghost" id="export-csv-btn"><i data-lucide="download"></i> Export CSV</button>
+            </div>
+
+            <div class="grid grid-cols-4 gap-4 mb-5">
+              <div class="ln-card p-4"><div class="widget-title mb-2">Total Items</div><div class="stat-num" style="color:var(--ink)">64</div></div>
+              <div class="ln-card p-4"><div class="widget-title mb-2">Completed</div><div class="stat-num" style="color:var(--green)">37</div></div>
+              <div class="ln-card p-4"><div class="widget-title mb-2">Incomplete</div><div class="stat-num" style="color:var(--ink)">27</div></div>
+              <div class="ln-card p-4"><div class="widget-title mb-2">Overdue</div><div class="stat-num" style="color:var(--red)">6</div></div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-5 mb-5">
+              <div class="ln-card p-5">
+                <div class="widget-title mb-4">Breakdown by Section</div>
+                <div class="flex flex-col gap-3">
+                  <div><div class="flex justify-between text-[12px] mb-1"><span style="color:var(--ink-muted)">Design & Specification</span><span style="color:var(--ink-faint)">24</span></div><div class="h-1.5 rounded-full" style="background:var(--bg-4)"><div class="h-1.5 rounded-full" style="width:75%;background:var(--orange)"></div></div></div>
+                  <div><div class="flex justify-between text-[12px] mb-1"><span style="color:var(--ink-muted)">Procurement</span><span style="color:var(--ink-faint)">18</span></div><div class="h-1.5 rounded-full" style="background:var(--bg-4)"><div class="h-1.5 rounded-full" style="width:56%;background:var(--orange)"></div></div></div>
+                  <div><div class="flex justify-between text-[12px] mb-1"><span style="color:var(--ink-muted)">Installation</span><span style="color:var(--ink-faint)">14</span></div><div class="h-1.5 rounded-full" style="background:var(--bg-4)"><div class="h-1.5 rounded-full" style="width:44%;background:var(--orange)"></div></div></div>
+                  <div><div class="flex justify-between text-[12px] mb-1"><span style="color:var(--ink-muted)">Sign-off</span><span style="color:var(--ink-faint)">8</span></div><div class="h-1.5 rounded-full" style="background:var(--bg-4)"><div class="h-1.5 rounded-full" style="width:25%;background:var(--orange)"></div></div></div>
+                </div>
+              </div>
+              <div class="ln-card p-5">
+                <div class="widget-title mb-4">Breakdown by State</div>
+                <div class="flex flex-col gap-3">
+                  <div><div class="flex justify-between text-[12px] mb-1"><span style="color:var(--ink-muted)">Complete</span><span style="color:var(--ink-faint)">37</span></div><div class="h-1.5 rounded-full" style="background:var(--bg-4)"><div class="h-1.5 rounded-full" style="width:58%;background:var(--green)"></div></div></div>
+                  <div><div class="flex justify-between text-[12px] mb-1"><span style="color:var(--ink-muted)">In Progress</span><span style="color:var(--ink-faint)">12</span></div><div class="h-1.5 rounded-full" style="background:var(--bg-4)"><div class="h-1.5 rounded-full" style="width:19%;background:var(--blue)"></div></div></div>
+                  <div><div class="flex justify-between text-[12px] mb-1"><span style="color:var(--ink-muted)">To Do</span><span style="color:var(--ink-faint)">9</span></div><div class="h-1.5 rounded-full" style="background:var(--bg-4)"><div class="h-1.5 rounded-full" style="width:14%;background:var(--ink-faint)"></div></div></div>
+                  <div><div class="flex justify-between text-[12px] mb-1"><span style="color:var(--ink-muted)">Blocked</span><span style="color:var(--ink-faint)">6</span></div><div class="h-1.5 rounded-full" style="background:var(--bg-4)"><div class="h-1.5 rounded-full" style="width:9%;background:var(--amber)"></div></div></div>
+                </div>
+              </div>
+              <div class="ln-card p-5 flex flex-col items-center justify-center">
+                <div class="widget-title self-start mb-1">Progress</div>
+                <div class="why-tag self-start mb-3">Toward fully done</div>
+                <svg width="120" height="120" viewBox="0 0 120 120">
+                  <circle cx="60" cy="60" r="50" fill="none" stroke="var(--bg-4)" stroke-width="10"/>
+                  <circle cx="60" cy="60" r="50" fill="none" stroke="var(--orange)" stroke-width="10" stroke-linecap="round" stroke-dasharray="314.159" stroke-dashoffset="100.5" transform="rotate(-90 60 60)"/>
+                  <text x="60" y="66" text-anchor="middle" font-family="Inter" font-size="24" font-weight="700" fill="#e5e5e0">68%</text>
+                </svg>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-5 mb-5">
+              <div class="ln-card p-5">
+                <div class="widget-title mb-1">Completion Over Time</div>
+                <div class="why-tag mb-4">Is completion on track?</div>
+                <svg viewBox="0 0 480 130" class="w-full" style="max-height:130px">
+                  <defs><linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ff6b4a" stop-opacity="0.35"/><stop offset="100%" stop-color="#ff6b4a" stop-opacity="0"/></linearGradient></defs>
+                  <g stroke="var(--border)" stroke-width="1"><line x1="0" y1="20" x2="480" y2="20"/><line x1="0" y1="60" x2="480" y2="60"/><line x1="0" y1="100" x2="480" y2="100"/></g>
+                  <path d="M0,110 L60,100 L120,92 L180,78 L240,70 L300,52 L360,44 L420,28 L480,18 L480,130 L0,130 Z" fill="url(#areaGrad)"/>
+                  <polyline points="0,110 60,100 120,92 180,78 240,70 300,52 360,44 420,28 480,18" fill="none" stroke="var(--orange)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <g fill="var(--orange)"><circle cx="0" cy="110" r="3"/><circle cx="120" cy="92" r="3"/><circle cx="240" cy="70" r="3"/><circle cx="360" cy="44" r="3"/><circle cx="480" cy="18" r="3.5"/></g>
+                </svg>
+                <div class="flex justify-between text-[10.5px] mt-1" style="color:var(--ink-faint)"><span>Aug 18</span><span>Aug 25</span><span>Sep 1</span><span>Sep 8</span><span>Sep 14</span></div>
+              </div>
+              <div class="ln-card p-5">
+                <div class="widget-title mb-1">Completion Heatmap</div>
+                <div class="why-tag mb-4">Rhythm of work — aggregated, not per-Member</div>
+                <div id="heatmap" class="flex gap-[3px]"></div>
+                <div class="flex items-center gap-1.5 mt-3 justify-end">
+                  <span class="text-[10px]" style="color:var(--ink-faint)">Less</span>
+                  <span class="hm-cell" style="background:var(--bg-4)"></span><span class="hm-cell" style="background:rgba(255,107,74,.25)"></span><span class="hm-cell" style="background:rgba(255,107,74,.5)"></span><span class="hm-cell" style="background:rgba(255,107,74,.75)"></span><span class="hm-cell" style="background:#ff6b4a"></span>
+                  <span class="text-[10px]" style="color:var(--ink-faint)">More</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-5 mb-5">
+              <div class="ln-card p-5">
+                <div class="widget-title mb-1">Contribution Map</div>
+                <div class="why-tag mb-4">Who is moving work forward — normalized rate, not raw count</div>
+                <div class="flex flex-col gap-3">
+                  <div class="flex items-center gap-3"><div class="ln-avatar" style="background:var(--orange-light)">RK</div><span class="text-[12.5px] w-24 flex-shrink-0" style="color:var(--ink)">Riya Kapoor</span><div class="flex-1 h-2 rounded-full" style="background:var(--bg-4)"><div class="h-2 rounded-full" style="width:82%;background:var(--orange)"></div></div><span class="text-[11.5px] font-mono-label w-10 text-right" style="color:var(--ink-muted)">82%</span></div>
+                  <div class="flex items-center gap-3"><div class="ln-avatar" style="background:var(--green)">MT</div><span class="text-[12.5px] w-24 flex-shrink-0" style="color:var(--ink)">Maya Torres</span><div class="flex-1 h-2 rounded-full" style="background:var(--bg-4)"><div class="h-2 rounded-full" style="width:64%;background:var(--orange)"></div></div><span class="text-[11.5px] font-mono-label w-10 text-right" style="color:var(--ink-muted)">64%</span></div>
+                  <div class="flex items-center gap-3"><div class="ln-avatar" style="background:var(--blue)">PS</div><span class="text-[12.5px] w-24 flex-shrink-0" style="color:var(--ink)">Priya Shah</span><div class="flex-1 h-2 rounded-full" style="background:var(--bg-4)"><div class="h-2 rounded-full" style="width:47%;background:var(--orange)"></div></div><span class="text-[11.5px] font-mono-label w-10 text-right" style="color:var(--ink-muted)">47%</span></div>
+                </div>
+                <div class="text-[11px] mt-4" style="color:var(--ink-faint)">Completion rate = Items completed ÷ Items assigned. Never a raw count.</div>
+                <div id="peer-comparison-extra" class="mt-4 pt-4 hidden" style="border-top:1px dashed var(--border-strong)">
+                  <div class="field-label mb-2" style="color:var(--orange-light)">Peer comparison (enabled) — ranked</div>
+                  <div class="flex items-center justify-between text-[12px] py-1"><span style="color:var(--ink)">1. Riya Kapoor</span><span style="color:var(--ink-faint)">82%</span></div>
+                  <div class="flex items-center justify-between text-[12px] py-1"><span style="color:var(--ink)">2. Maya Torres</span><span style="color:var(--ink-faint)">64%</span></div>
+                  <div class="flex items-center justify-between text-[12px] py-1"><span style="color:var(--ink)">3. Priya Shah</span><span style="color:var(--ink-faint)">47%</span></div>
+                </div>
+              </div>
+              <div class="ln-card p-5">
+                <div class="widget-title mb-1">Attention Imbalance</div>
+                <div class="why-tag mb-2">Where is attention skewed across the List's people</div>
+                <div class="flex items-center gap-4">
+                  <svg width="180" height="180" viewBox="0 0 180 180" class="flex-shrink-0">
+                    <polygon points="90,20 160,90 90,160 20,90" fill="none" stroke="var(--border)" stroke-width="1"/>
+                    <polygon points="90,38 142,90 90,142 38,90" fill="none" stroke="var(--border)" stroke-width="1"/>
+                    <polygon points="90,56 124,90 90,124 56,90" fill="none" stroke="var(--border)" stroke-width="1"/>
+                    <line x1="90" y1="20" x2="90" y2="160" stroke="var(--border)" stroke-width="1"/>
+                    <line x1="20" y1="90" x2="160" y2="90" stroke="var(--border)" stroke-width="1"/>
+                    <polygon points="90,32 138,90 100,146 46,100" fill="rgba(255,107,74,.18)" stroke="var(--orange)" stroke-width="2"/>
+                    <polygon points="90,50 118,90 90,130 58,84" fill="rgba(91,157,255,.12)" stroke="var(--blue)" stroke-width="2"/>
+                    <text x="90" y="12" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#8f8f8a">TO DO</text>
+                    <text x="172" y="93" text-anchor="end" font-family="JetBrains Mono" font-size="9" fill="#8f8f8a">BLOCKED</text>
+                    <text x="90" y="174" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#8f8f8a">OVERDUE</text>
+                    <text x="8" y="93" text-anchor="start" font-family="JetBrains Mono" font-size="9" fill="#8f8f8a">DONE</text>
+                  </svg>
+                  <div class="flex flex-col gap-2">
+                    <div class="flex items-center gap-2 text-[12px]"><span class="ln-dot" style="background:var(--orange)"></span> Riya Kapoor</div>
+                    <div class="flex items-center gap-2 text-[12px]"><span class="ln-dot" style="background:var(--blue)"></span> Maya Torres</div>
+                    <div class="text-[11px] mt-1" style="color:var(--ink-faint)">Normalized per Member, not raw count.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="ln-card p-5 flex items-center justify-between">
+              <div class="flex items-start gap-3">
+                <i data-lucide="users" class="w-4 h-4 mt-0.5" style="color:var(--ink-faint)"></i>
+                <div>
+                  <div class="text-[13px] font-semibold" style="color:var(--ink)">Peer comparison</div>
+                  <div class="text-[12px] mt-0.5" style="color:var(--ink-muted)">Workspace-level, off by default. When enabled, unlocks a directly comparative view on top of the Contribution Map and Radar Chart above — still normalized metrics, never raw counts. Only a Workspace Owner or Admin can change this.</div>
+                </div>
+              </div>
+              <div class="toggle flex-shrink-0" id="peer-comparison-toggle"><div class="knob"></div></div>
+            </div>
+
+          </div>
+
+        </section>
+
+        <!-- =========================================================== STUB (Updates / Profile / Personal Space / etc.) =========================================================== -->
+        <section id="screen-stub" class="screen max-w-2xl">
+          <div class="ln-card stub-card">
+            <i data-lucide="hammer" class="w-7 h-7 mx-auto mb-4" style="color:var(--orange-light)"></i>
+            <div class="text-[16px] font-semibold mb-2" id="stub-title" style="color:var(--ink)">Updates</div>
+            <p class="text-[13px]" id="stub-note" style="color:var(--ink-muted)"></p>
+            <button class="ln-btn ln-btn-ghost mt-5" data-screen-jump="home"><i data-lucide="arrow-left"></i> Back to Home</button>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-stack"></div>
+
+<script>
+lucide.createIcons();
+
+/* ---------------- toast ---------------- */
+function toast(message, icon) {
+  const stack = document.getElementById('toast-stack');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `<i data-lucide="${icon || 'check-circle'}"></i><span>${message}</span>`;
+  stack.appendChild(el);
+  lucide.createIcons({ nodes: [el] });
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .2s ease'; setTimeout(() => el.remove(), 200); }, 2600);
+}
+
+/* ---------------- screens ---------------- */
+function showScreen(name, opts) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+
+  document.querySelectorAll('[data-show-on]').forEach(el => {
+    const list = el.dataset.showOn.split(',');
+    el.style.display = list.includes(name) ? 'flex' : 'none';
+  });
+
+  const label = document.getElementById('topbar-label');
+  if (name === 'home') label.textContent = 'Home';
+  else if (name === 'my-tasks') label.textContent = 'My Tasks';
+  else if (name === 'list') label.textContent = opts?.listName || document.getElementById('list-title').textContent;
+  else if (name === 'stub') label.textContent = opts?.stubTitle || 'ListItUp';
+
+  if (name === 'list' && opts?.listName) {
+    document.getElementById('list-title').textContent = opts.listName;
+    if (opts.listName !== 'Platform Retrofit — Phase 2') {
+      toast(`Showing demo data — "${opts.listName}" reuses this mock's fixture content`, 'info');
+    }
+  }
+
+  if (name === 'stub') {
+    document.getElementById('stub-title').textContent = opts?.stubTitle || 'Coming soon';
+    document.getElementById('stub-note').textContent = opts?.stubNote || 'Not in this design-mock batch yet.';
+  }
+}
+
+document.querySelectorAll('.ln-nav-item[data-screen]').forEach(el => {
+  el.addEventListener('click', () => {
+    document.querySelectorAll('.ln-nav-item').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+    showScreen(el.dataset.screen, { listName: el.dataset.listName, stubTitle: el.dataset.stubTitle, stubNote: el.dataset.stubNote });
+    if (el.dataset.screen === 'stub' && el.querySelector('.ln-nav-badge')) {
+      el.querySelector('.ln-nav-badge').style.display = 'none';
+    }
+  });
+});
+
+document.querySelectorAll('[data-screen-jump]').forEach(el => {
+  el.addEventListener('click', () => {
+    document.querySelectorAll('.ln-nav-item').forEach(n => n.classList.remove('active'));
+    const target = el.dataset.screenJump;
+    const match = [...document.querySelectorAll('.ln-nav-item[data-screen]')].find(n => n.dataset.screen === target && (!el.dataset.listName || n.dataset.listName === el.dataset.listName));
+    if (match) match.classList.add('active');
+    showScreen(target, { listName: el.dataset.listName, stubTitle: el.dataset.stubTitle, stubNote: el.dataset.stubNote });
+  });
+});
+
+/* ---------------- tabs ---------------- */
+document.querySelectorAll('.ln-tab[data-tab]').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const group = tab.closest('[data-tabgroup]').dataset.tabgroup;
+    document.querySelectorAll(`.ln-tab[data-tab]`).forEach(t => { if (t.closest('[data-tabgroup]').dataset.tabgroup === group) t.classList.remove('active'); });
+    tab.classList.add('active');
+    document.querySelectorAll(`.tab-panel[data-tabgroup="${group}"]`).forEach(p => p.classList.remove('active'));
+    document.getElementById(tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab !== 'l-list') closeDrawer();
+  });
+});
+
+/* ---------------- generic dropdowns ---------------- */
+document.addEventListener('click', (e) => {
+  const trigger = e.target.closest('.dd-trigger');
+  if (trigger) {
+    const wrap = trigger.closest('.dd-wrap');
+    const wasOpen = wrap.classList.contains('open');
+    document.querySelectorAll('.dd-wrap.open').forEach(w => w.classList.remove('open'));
+    if (!wasOpen) wrap.classList.add('open');
+    e.stopPropagation();
+    return;
+  }
+  if (!e.target.closest('.dropdown-menu')) {
+    document.querySelectorAll('.dd-wrap.open').forEach(w => w.classList.remove('open'));
+  }
+});
+
+/* workspace switcher */
+document.querySelectorAll('#dd-workspace .dropdown-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const [initials, name] = item.dataset.ws.split('|');
+    document.getElementById('ws-avatar').textContent = initials;
+    document.getElementById('ws-name').textContent = name;
+    document.querySelectorAll('.home-ws-label, #home-ws-label').forEach(n => n.textContent = name);
+    document.querySelectorAll('#dd-workspace .dropdown-item').forEach(i => i.classList.remove('selected'));
+    item.classList.add('selected');
+    toast(`Switched to ${name}`, 'repeat');
+  });
+});
+
+/* my tasks: sort / group / workspace filter */
+document.querySelectorAll('#dd-sort .dropdown-item').forEach(item => item.addEventListener('click', () => {
+  document.getElementById('sort-label').textContent = item.dataset.sort;
+  document.querySelectorAll('#dd-sort .dropdown-item').forEach(i => i.classList.remove('selected'));
+  item.classList.add('selected');
+  toast(`Sorted by ${item.dataset.sort}`, 'arrow-down-up');
+}));
+document.querySelectorAll('#dd-group .dropdown-item').forEach(item => item.addEventListener('click', () => {
+  document.getElementById('group-label').textContent = item.dataset.group;
+  document.querySelectorAll('#dd-group .dropdown-item').forEach(i => i.classList.remove('selected'));
+  item.classList.add('selected');
+  toast(`Grouped by ${item.dataset.group}`, 'layers');
+}));
+document.querySelectorAll('#dd-ws-filter .dropdown-item').forEach(item => item.addEventListener('click', () => {
+  const trigger = document.querySelector('[data-dropdown="dd-ws-filter"]');
+  trigger.textContent = item.dataset.wsFilter === 'all' ? 'All Workspaces' : item.dataset.wsFilter;
+  document.querySelectorAll('#dd-ws-filter .dropdown-item').forEach(i => i.classList.remove('selected'));
+  item.classList.add('selected');
+  document.querySelectorAll('#mytasks-rows .row[data-workspace]').forEach(row => {
+    const show = item.dataset.wsFilter === 'all' || row.dataset.workspace === item.dataset.wsFilter;
+    row.classList.toggle('hidden-by-filter', !show);
+  });
+}));
+
+/* list: add rule grouping */
+document.querySelectorAll('#dd-rule .dropdown-item').forEach(item => item.addEventListener('click', () => {
+  document.getElementById('rule-label').textContent = item.dataset.rule;
+  document.querySelectorAll('#dd-rule .dropdown-item').forEach(i => i.classList.remove('selected'));
+  item.classList.add('selected');
+  toast(`List now grouped by ${item.dataset.rule}`, 'git-branch');
+}));
+
+/* my tasks: default-visibility filter chip (To Do + Blocked <-> All statuses) */
+let visibilityExpanded = false;
+document.getElementById('visibility-chip').addEventListener('click', function () {
+  visibilityExpanded = !visibilityExpanded;
+  this.classList.toggle('active', !visibilityExpanded);
+  this.querySelector('span').textContent = visibilityExpanded ? 'All statuses' : 'To Do + Blocked';
+  document.querySelectorAll('.hide-when-focused').forEach(el => el.style.display = visibilityExpanded ? '' : 'none');
+});
+document.querySelectorAll('.hide-when-focused').forEach(el => el.style.display = 'none');
+
+/* quick add */
+document.getElementById('quick-add-input').addEventListener('keydown', function (e) {
+  if (e.key !== 'Enter' || !this.value.trim()) return;
+  let text = this.value.trim();
+  const dateMatch = text.match(/\b(today|tomorrow)\b/i);
+  const labelMatch = text.match(/#(\w[\w-]*)/);
+  const assigneeMatch = text.match(/@(\w[\w-]*)/);
+  const listMatch = text.match(/\/([\w][\w -]*)/);
+  text = text.replace(/\b(today|tomorrow)\b/i, '').replace(/#(\w[\w-]*)/, '').replace(/@(\w[\w-]*)/, '').replace(/\/([\w][\w -]*)/, '').trim();
+
+  const row = document.createElement('div');
+  row.className = 'row just-added';
+  row.dataset.workspace = 'Acme Studio';
+  row.innerHTML = `
+    <span class="ln-checkbox"></span>
+    <span class="row-title text-[13.5px] flex-1" style="color:var(--ink)">${text || 'Untitled task'}</span>
+    <span class="ln-chip">${listMatch ? listMatch[1].trim() : 'Inbox'}</span>
+    ${labelMatch ? `<span class="ln-chip active">#${labelMatch[1]}</span>` : ''}
+    <span class="ln-badge ln-badge-blue">${dateMatch ? dateMatch[1] : 'Undated'}</span>
+    <div class="ln-avatar" style="background:var(--orange-light)">${assigneeMatch ? assigneeMatch[1].slice(0,2).toUpperCase() : 'RK'}</div>
+  `;
+  const firstGroup = document.querySelector('#mytasks-rows .group-label');
+  firstGroup.insertAdjacentElement('afterend', row);
+  this.value = '';
+  toast('Task created via Quick-Add', 'plus-circle');
+});
+
+/* checkboxes (event delegation, whole document) */
+document.addEventListener('click', (e) => {
+  const box = e.target.closest('.ln-checkbox');
+  if (!box) return;
+  const willBeChecked = !box.classList.contains('checked');
+  box.classList.toggle('checked');
+  box.innerHTML = willBeChecked ? '<svg data-lucide="check"></svg>' : '';
+  lucide.createIcons({ nodes: [box] });
+  const container = box.closest('.row, .item-row');
+  if (container) {
+    container.classList.toggle('is-complete', willBeChecked);
+    const badge = container.querySelector('.row-badge');
+    if (badge) {
+      if (willBeChecked) { badge.dataset.prev = badge.textContent; badge.textContent = 'Complete'; badge.className = 'ln-badge ln-badge-green row-badge'; }
+      else if (badge.dataset.prev) { badge.textContent = badge.dataset.prev; badge.className = 'ln-badge ln-badge-muted row-badge'; }
+    }
+  }
+  toast(willBeChecked ? 'Marked complete' : 'Marked incomplete', 'check');
+});
+
+/* section collapse */
+document.querySelectorAll('.section-head').forEach(head => {
+  head.addEventListener('click', (e) => {
+    if (e.target.closest('.dd-wrap')) return;
+    head.closest('.ln-section').classList.toggle('collapsed');
+  });
+});
+
+/* hide empty sections */
+document.getElementById('hide-empty-chip').addEventListener('click', function () {
+  this.classList.toggle('active');
+  applyHideEmpty();
+});
+function applyHideEmpty() {
+  const active = document.getElementById('hide-empty-chip').classList.contains('active');
+  document.querySelectorAll('#sections-container .ln-section').forEach(sec => {
+    const count = sec.querySelectorAll('.item-row').length;
+    sec.classList.toggle('empty-hidden', active && count === 0);
+  });
+}
+
+/* add section */
+let sectionCounter = 0;
+document.getElementById('add-section-btn').addEventListener('click', () => {
+  const name = prompt('New Section name:', 'New Section');
+  if (!name) return;
+  sectionCounter++;
+  const id = 'new-' + sectionCounter;
+  const sec = document.createElement('div');
+  sec.className = 'ln-section';
+  sec.dataset.sectionId = id;
+  sec.innerHTML = `
+    <div class="section-head">
+      <i data-lucide="chevron-down" class="w-3.5 h-3.5 chevron" style="color:var(--ink-faint)"></i>
+      <span class="text-[13px] font-semibold section-name" style="color:var(--ink)">${name}</span>
+      <span class="ln-badge ln-badge-muted section-count">0</span>
+      <div class="flex-1"></div>
+      <div class="dd-wrap" onclick="event.stopPropagation()">
+        <button class="ln-icon-btn dd-trigger" style="width:26px;height:26px" data-dropdown="dd-sec-${id}"><i data-lucide="more-horizontal" class="w-3.5 h-3.5"></i></button>
+        <div class="dropdown-menu right" id="dd-sec-${id}">
+          <div class="dropdown-item" data-sec-action="rename"><i data-lucide="pencil"></i> Rename Section</div>
+          <div class="dropdown-item" data-sec-action="duplicate"><i data-lucide="copy"></i> Duplicate Section</div>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-item" data-sec-action="up"><i data-lucide="arrow-up"></i> Move Up</div>
+          <div class="dropdown-item" data-sec-action="down"><i data-lucide="arrow-down"></i> Move Down</div>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-item" data-sec-action="delete" style="color:var(--red)"><i data-lucide="trash-2"></i> Delete Section</div>
+        </div>
+      </div>
+    </div>
+    <div class="px-3 pb-3 text-[12px]" style="color:var(--ink-faint)">No items yet — drag one in or create a new Item here.</div>
+  `;
+  document.getElementById('sections-container').appendChild(sec);
+  lucide.createIcons({ nodes: [sec] });
+  wireSectionHead(sec.querySelector('.section-head'));
+  wireSectionDropdown(sec);
+  applyHideEmpty();
+  toast(`Section "${name}" created`, 'plus');
+});
+
+function wireSectionHead(head) {
+  head.addEventListener('click', (e) => {
+    if (e.target.closest('.dd-wrap')) return;
+    head.closest('.ln-section').classList.toggle('collapsed');
+  });
+}
+function wireSectionDropdown(sectionEl) {
+  sectionEl.querySelectorAll('[data-sec-action]').forEach(action => {
+    action.addEventListener('click', () => handleSectionAction(sectionEl, action.dataset.secAction));
+  });
+}
+function handleSectionAction(sectionEl, action) {
+  const nameEl = sectionEl.querySelector('.section-name');
+  if (action === 'rename') {
+    const name = prompt('Rename Section:', nameEl.textContent);
+    if (name) { nameEl.textContent = name; toast('Section renamed', 'pencil'); }
+  } else if (action === 'duplicate') {
+    const clone = sectionEl.cloneNode(true);
+    clone.querySelector('.section-name').textContent = nameEl.textContent + ' (copy)';
+    sectionEl.insertAdjacentElement('afterend', clone);
+    lucide.createIcons({ nodes: [clone] });
+    wireSectionHead(clone.querySelector('.section-head'));
+    wireSectionDropdown(clone);
+    toast('Section duplicated', 'copy');
+  } else if (action === 'delete') {
+    if (confirm(`Delete "${nameEl.textContent}"? Its Items move to no Section.`)) {
+      sectionEl.remove();
+      toast('Section deleted', 'trash-2');
+    }
+  } else if (action === 'up') {
+    const prev = sectionEl.previousElementSibling;
+    if (prev) sectionEl.parentElement.insertBefore(sectionEl, prev);
+  } else if (action === 'down') {
+    const next = sectionEl.nextElementSibling;
+    if (next) sectionEl.parentElement.insertBefore(next, sectionEl);
+  }
+}
+document.querySelectorAll('#sections-container .ln-section').forEach(sectionEl => wireSectionDropdown(sectionEl));
+
+/* ---------------- item drawer ---------------- */
+const ITEM_DATA = {
+  'item-1': { section: 'Design & Specification', title: 'Review tunnel-clearance calculations from vendor', state: 'blocked', blocker: 'awaiting revised load tables from North Line structural team.', priority: 'High', due: 'Sep 16, 2026', createdBy: 'Maya Torres' },
+  'item-2': { section: 'Design & Specification', title: 'Draft revised platform edge drawings', state: 'todo', priority: 'Normal', due: 'Sep 19, 2026', createdBy: 'Riya Kapoor' },
+  'item-3': { section: 'Design & Specification', title: 'Confirm signage placement with accessibility consultant', state: 'complete', priority: 'Normal', due: 'Sep 10, 2026', createdBy: 'Priya Shah' },
+  'item-3a': { section: 'Design & Specification', title: 'Circulate drawing revision to stakeholders', state: 'todo', priority: 'Low', due: 'Undated', createdBy: 'Riya Kapoor' },
+  'item-4': { section: 'Procurement', title: 'Source replacement bearings for Unit 4', state: 'todo', priority: 'High', due: 'Sep 20, 2026', createdBy: 'Maya Torres' },
+  'item-5': { section: 'Procurement', title: 'Compare vendor quotes for platform sealant', state: 'todo', priority: 'Low', due: 'Undated', createdBy: 'Maya Torres' },
+};
+const STATE_CLASS = { todo: 'active-todo', progress: 'active-progress', blocked: 'active-blocked', complete: 'active-complete' };
+let currentDrawerItem = null;
+
+function openDrawer(itemId) {
+  const data = ITEM_DATA[itemId] || { section: 'List', title: document.querySelector(`[data-item-id="${itemId}"] .row-title`)?.textContent.trim() || 'Item', state: 'todo', priority: 'Normal', due: 'Undated', createdBy: '—' };
+  currentDrawerItem = itemId;
+  document.querySelectorAll('.item-row').forEach(r => r.classList.remove('selected'));
+  document.querySelector(`[data-item-id="${itemId}"]`)?.classList.add('selected');
+
+  document.getElementById('drawer-section-label').textContent = 'Item · ' + data.section;
+  document.getElementById('drawer-title').textContent = data.title;
+  document.getElementById('drawer-priority').textContent = data.priority;
+  document.getElementById('drawer-due').textContent = data.due;
+  document.getElementById('drawer-created-by').textContent = data.createdBy;
+  setDrawerState(data.state, data.blocker, false);
+
+  document.getElementById('item-drawer').classList.remove('hidden');
+}
+function setDrawerState(state, blockerText, announce) {
+  document.querySelectorAll('#drawer-state-pills .state-pill').forEach(p => p.className = 'state-pill');
+  const pill = document.querySelector(`#drawer-state-pills [data-state="${state}"]`);
+  if (pill) pill.classList.add(STATE_CLASS[state]);
+  const box = document.getElementById('drawer-blocker-box');
+  if (state === 'blocked') {
+    box.style.display = '';
+    if (blockerText) document.getElementById('drawer-blocker-text').textContent = blockerText;
+  } else {
+    box.style.display = 'none';
+  }
+  if (announce) toast(`State set to ${state === 'progress' ? 'In Progress' : state[0].toUpperCase() + state.slice(1)}`, 'refresh-cw');
+}
+function closeDrawer() {
+  document.getElementById('item-drawer').classList.add('hidden');
+  document.querySelectorAll('.item-row').forEach(r => r.classList.remove('selected'));
+  currentDrawerItem = null;
+}
+document.getElementById('drawer-close').addEventListener('click', closeDrawer);
+document.querySelectorAll('.item-row').forEach(row => {
+  row.addEventListener('click', (e) => {
+    if (e.target.closest('.ln-checkbox')) return;
+    openDrawer(row.dataset.itemId);
+  });
+});
+document.querySelectorAll('#drawer-state-pills .state-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    const state = pill.dataset.state;
+    if (state === 'blocked') {
+      const reason = prompt('Blocker reason (required to move an Item into Blocked):', 'Waiting on external input.');
+      if (!reason) return;
+      setDrawerState('blocked', reason, true);
+    } else {
+      setDrawerState(state, null, true);
+    }
+  });
+});
+document.getElementById('drawer-note-send').addEventListener('click', () => {
+  const input = document.getElementById('drawer-note-input');
+  if (!input.value.trim()) return;
+  const wrap = document.getElementById('drawer-notes');
+  const note = document.createElement('div');
+  note.className = 'flex gap-2';
+  const mentioned = /@riya/i.test(input.value);
+  note.innerHTML = `<div class="ln-avatar flex-shrink-0" style="background:var(--blue)">RK</div>
+    <div class="text-[13px]" style="color:var(--ink-muted)">
+      <span style="color:var(--ink)" class="font-medium">Riya Kapoor</span> — ${input.value.replace(/@riya/i, '<span style="color:var(--orange-light)">@Riya Kapoor</span>')}
+      <div class="text-[11px] mt-0.5" style="color:var(--ink-faint)">Just now</div>
+    </div>`;
+  wrap.appendChild(note);
+  input.value = '';
+  toast(mentioned ? 'Note added — @Riya Kapoor notified (they already have access)' : 'Note added', 'message-square');
+});
+
+/* ---------------- personal space expand ---------------- */
+document.getElementById('personal-space-toggle').addEventListener('click', function () {
+  const items = document.getElementById('personal-space-items');
+  const chevron = this.querySelector('.chevron');
+  const open = items.style.display !== 'none';
+  items.style.display = open ? 'none' : 'block';
+  chevron.style.transform = open ? '' : 'rotate(90deg)';
+});
+
+/* ---------------- generic toast-trigger buttons ---------------- */
+document.querySelectorAll('[data-toast]').forEach(btn => {
+  btn.addEventListener('click', () => toast(btn.dataset.toast, btn.dataset.toastIcon));
+});
+
+/* ---------------- peer comparison toggle ---------------- */
+document.getElementById('peer-comparison-toggle').addEventListener('click', function () {
+  const on = this.classList.toggle('on');
+  document.getElementById('peer-comparison-extra').classList.toggle('hidden', !on);
+  toast(on ? 'Peer comparison enabled for Acme Studio' : 'Peer comparison disabled', 'users');
+});
+
+/* ---------------- export csv (real download) ---------------- */
+document.getElementById('export-csv-btn').addEventListener('click', () => {
+  const csv = 'Section,Title,State,Priority,Due\n' +
+    'Design & Specification,Review tunnel-clearance calculations from vendor,Blocked,High,2026-09-16\n' +
+    'Design & Specification,Draft revised platform edge drawings,To Do,Normal,2026-09-19\n' +
+    'Procurement,Source replacement bearings for Unit 4,To Do,High,2026-09-20\n';
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'platform-retrofit-phase-2-report.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV exported', 'download');
+});
+
+/* ---------------- heatmap ---------------- */
+const hm = document.getElementById('heatmap');
+const weeks = 12;
+const intensity = [0,0,1,2,0,1,3,2,1,0,2,4,1,0,3,2,1,0,0,1,2,3,4,2,1,0,1,2,3,1,0,0,2,3,4,3,2,1,0,1,2,3,4,3,2,1,0,0,1,2,3,4,2,1,0,1,2,3,2,1,0,0,1,2,3,4,3,2,1,0,1,2,3,4,3,2,1,0,1,2,3,4,3,2];
+const colors = ['var(--bg-4)','rgba(255,107,74,.25)','rgba(255,107,74,.5)','rgba(255,107,74,.75)','#ff6b4a'];
+for (let w = 0; w < weeks; w++) {
+  const col = document.createElement('div');
+  col.className = 'flex flex-col gap-[3px]';
+  for (let d = 0; d < 7; d++) {
+    const cell = document.createElement('div');
+    cell.className = 'hm-cell';
+    cell.style.background = colors[intensity[w*7+d] || 0];
+    col.appendChild(cell);
+  }
+  hm.appendChild(col);
+}
+
+/* keyboard: escape closes drawer + dropdowns */
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeDrawer();
+    document.querySelectorAll('.dd-wrap.open').forEach(w => w.classList.remove('open'));
+  }
+});
+</script>
+</body>
+</html>

@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The browser SMTP-failure test runs a second `next dev` instance with
+    // its own build output (see NEXT_DIST_DIR in playwright.config.ts) so
+    // it doesn't race the primary instance's .next directory.
+    ".next-*/**",
   ]),
 ]);
 
