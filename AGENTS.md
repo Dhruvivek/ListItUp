@@ -13,6 +13,7 @@ Claude Code imports these automatically into every session in this repo (do not 
 ## Working Rules
 
 - When the User says to “go ahead” on a coding task, continue through implementation, verification, commit, push, and issue closure without pausing for progress updates. Stop only for a genuine decision, missing authority, or external blocker.
+- Push finished, verified work directly to `main`. Do not open GitHub PRs or leave work parked on a feature branch as the delivery mechanism — `main` is the only long-lived branch this repo's agent workflow uses. A short-lived branch is fine as working-copy isolation (e.g. a `git worktree` to avoid colliding with another concurrent agent session in a shared checkout), but merge it into `main` and delete both the local and remote branch once the work lands, rather than leaving it open as a PR.
 - Read `CONTEXT.md`, `Brand.md`, `DESIGN.md`, `Architecture.md`, and relevant files in `docs/` before planning work.
 - Treat `sample.html` as the current visual reference implementation for `DESIGN.md`.
 - Prefer small vertical slices that are demoable end to end.
