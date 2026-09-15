@@ -1,5 +1,11 @@
 import { addCalendarMonths, formatCalendarMonthParam, parseCalendarMonth } from "@/lib/item/item-my-tasks-calendar";
 import type { MyTasksBoardGroupBy } from "@/lib/item/item-my-tasks-board";
+import {
+  isValidMyTasksGroupBy,
+  isValidMyTasksSortBy,
+  type MyTasksGroupBy,
+  type MyTasksSortBy,
+} from "@/lib/item/item-my-tasks";
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticatedSession } from "@/lib/session/require-authenticated-session";
 
@@ -18,6 +24,9 @@ type Query = {
   tab?: string;
   groupBy?: string;
   month?: string;
+  q?: string;
+  sort?: string;
+  group?: string;
 };
 
 type Props = {
@@ -59,9 +68,30 @@ function myTasksHref(query: Query): string {
   if (query.tab && query.tab !== "list") params.set("tab", query.tab);
   if (query.groupBy) params.set("groupBy", query.groupBy);
   if (query.month) params.set("month", query.month);
+  if (query.q) params.set("q", query.q);
+  if (query.sort) params.set("sort", query.sort);
+  if (query.group) params.set("group", query.group);
   const search = params.toString();
   return search ? `/my-tasks?${search}` : "/my-tasks";
 }
+
+const CHIP_ACTIVE = "rounded-full border border-[#ff6b4a] px-3 py-1 text-xs text-[#ff8a70]";
+const CHIP_INACTIVE =
+  "rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-400 hover:text-neutral-200";
+
+const SORT_OPTIONS: { value: MyTasksSortBy; label: string }[] = [
+  { value: "SMART", label: "Smart" },
+  { value: "DUE_DATE", label: "Due date" },
+  { value: "PRIORITY", label: "Priority" },
+  { value: "TITLE", label: "Title" },
+];
+
+const GROUP_OPTIONS: { value: MyTasksGroupBy; label: string }[] = [
+  { value: "NONE", label: "None" },
+  { value: "WORKSPACE", label: "Workspace" },
+  { value: "PRIORITY", label: "Priority" },
+  { value: "DUE_DATE", label: "Due date" },
+];
 
 export default async function MyTasksPage({ searchParams }: Props) {
   const session = await requireAuthenticatedSession("/my-tasks");
@@ -70,6 +100,9 @@ export default async function MyTasksPage({ searchParams }: Props) {
   const sourceWorkspaceId = query.workspace || undefined;
   const includeCompleted = query.completed === "1";
   const includeArchived = query.archived === "1";
+  const search = query.q?.trim() ?? "";
+  const sortBy = query.sort && isValidMyTasksSortBy(query.sort) ? query.sort : "SMART";
+  const groupBy = query.group && isValidMyTasksGroupBy(query.group) ? query.group : "NONE";
   const now = new Date();
   const activeTab: TabKey = query.tab && isTabKey(query.tab) ? query.tab : "list";
 
@@ -78,11 +111,16 @@ export default async function MyTasksPage({ searchParams }: Props) {
     sourceWorkspaceId,
     includeCompleted,
     includeArchived,
+    search,
+    sortBy,
+    groupBy,
     now,
     boardGroupBy: query.groupBy,
     calendarMonth: query.month,
   });
 
+  const baseUrl = process.env.BETTER_AUTH_URL;
+  if (!baseUrl) throw new Error("BETTER_AUTH_URL must be set.");
   const boundComplete = (itemId: string) => completeMyTaskItemAction.bind(null, itemId);
   const boundMoveItem = moveMyTaskItemAction.bind(null, data.boardGroupBy);
 
@@ -119,14 +157,26 @@ export default async function MyTasksPage({ searchParams }: Props) {
 
         <QuickAddForm quickAddItemAction={quickAddItemAction} />
 
-        <div className="mt-6 flex flex-wrap items-center gap-2">
+        <form action="/my-tasks" method="GET" className="mt-4 flex items-center gap-2">
+          <input type="hidden" name="workspace" value={query.workspace ?? ""} />
+          <input type="hidden" name="completed" value={query.completed ?? ""} />
+          <input type="hidden" name="archived" value={query.archived ?? ""} />
+          <input type="hidden" name="sort" value={sortBy} />
+          <input type="hidden" name="group" value={groupBy} />
+          <input
+            type="search"
+            name="q"
+            defaultValue={search}
+            aria-label="Search your Items"
+            placeholder="Search your Items…"
+            className="w-full rounded-md border border-neutral-800 bg-[#0d0d0d] px-3 py-1.5 text-sm text-neutral-200 outline-none placeholder:text-neutral-600 focus:border-neutral-600"
+          />
+        </form>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <a
             href={myTasksHref({ ...query, workspace: undefined })}
-            className={
-              !data.selectedWorkspaceId
-                ? "rounded-full border border-[#ff6b4a] px-3 py-1 text-xs text-[#ff8a70]"
-                : "rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-400 hover:text-neutral-200"
-            }
+            className={!data.selectedWorkspaceId ? CHIP_ACTIVE : CHIP_INACTIVE}
           >
             All Workspaces
           </a>
@@ -134,11 +184,7 @@ export default async function MyTasksPage({ searchParams }: Props) {
             <a
               key={workspace.id}
               href={myTasksHref({ ...query, workspace: workspace.id })}
-              className={
-                data.selectedWorkspaceId === workspace.id
-                  ? "rounded-full border border-[#ff6b4a] px-3 py-1 text-xs text-[#ff8a70]"
-                  : "rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-400 hover:text-neutral-200"
-              }
+              className={data.selectedWorkspaceId === workspace.id ? CHIP_ACTIVE : CHIP_INACTIVE}
             >
               {workspace.isPersonal ? "Personal Space" : workspace.name}
             </a>
@@ -148,21 +194,13 @@ export default async function MyTasksPage({ searchParams }: Props) {
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <a
             href={myTasksHref({ ...query, completed: includeCompleted ? undefined : "1" })}
-            className={
-              includeCompleted
-                ? "rounded-full border border-[#ff6b4a] px-3 py-1 text-xs text-[#ff8a70]"
-                : "rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-400 hover:text-neutral-200"
-            }
+            className={includeCompleted ? CHIP_ACTIVE : CHIP_INACTIVE}
           >
             Completed
           </a>
           <a
             href={myTasksHref({ ...query, archived: includeArchived ? undefined : "1" })}
-            className={
-              includeArchived
-                ? "rounded-full border border-[#ff6b4a] px-3 py-1 text-xs text-[#ff8a70]"
-                : "rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-400 hover:text-neutral-200"
-            }
+            className={includeArchived ? CHIP_ACTIVE : CHIP_INACTIVE}
           >
             Archived
           </a>
@@ -191,7 +229,35 @@ export default async function MyTasksPage({ searchParams }: Props) {
         </nav>
 
         {activeTab === "list" ? (
-          <MyTasksList items={data.items} now={now} boundComplete={boundComplete} />
+          <>
+            <div className="mt-6 flex flex-wrap items-center gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-neutral-600">Sort:</span>
+              {SORT_OPTIONS.map((option) => (
+                <a
+                  key={option.value}
+                  href={myTasksHref({ ...query, sort: option.value })}
+                  className={sortBy === option.value ? CHIP_ACTIVE : CHIP_INACTIVE}
+                >
+                  {option.label}
+                </a>
+              ))}
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-neutral-600">Group:</span>
+              {GROUP_OPTIONS.map((option) => (
+                <a
+                  key={option.value}
+                  href={myTasksHref({ ...query, group: option.value })}
+                  className={groupBy === option.value ? CHIP_ACTIVE : CHIP_INACTIVE}
+                >
+                  {option.label}
+                </a>
+              ))}
+            </div>
+
+            <MyTasksList groups={data.groups} now={now} baseUrl={baseUrl} boundComplete={boundComplete} />
+          </>
         ) : activeTab === "board" ? (
           <>
             <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -200,11 +266,7 @@ export default async function MyTasksPage({ searchParams }: Props) {
                 <a
                   key={option.key}
                   href={myTasksHref({ ...query, tab: "board", groupBy: option.key })}
-                  className={
-                    data.boardGroupBy === option.key
-                      ? "rounded-full border border-[#ff6b4a] px-3 py-1 text-xs text-[#ff8a70]"
-                      : "rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-400 hover:text-neutral-200"
-                  }
+                  className={data.boardGroupBy === option.key ? CHIP_ACTIVE : CHIP_INACTIVE}
                 >
                   {option.label}
                 </a>

@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 
-import { isItemOverdue, isVisibleByDefault, sortMyTasks } from "./item-my-tasks";
+import {
+  applyMyTasksSort,
+  groupMyTasksItems,
+  isItemOverdue,
+  isValidMyTasksGroupBy,
+  isValidMyTasksSortBy,
+  isVisibleByDefault,
+  myTaskItemHref,
+  sortMyTasks,
+} from "./item-my-tasks";
 
 // isVisibleByDefault: only COMPLETE/ARCHIVED are hidden unless explicitly
 // requested (#42) — TO_DO, IN_PROGRESS, and BLOCKED all show by default.
@@ -50,5 +59,92 @@ assert.equal(isItemOverdue({ dueDate: null }, now), false);
     ]
   );
 }
+
+// isValidMyTasksSortBy / isValidMyTasksGroupBy: allow-list guards for the
+// query-param values threading in from the URL (#44) — untrusted input
+// must be validated before it drives behavior.
+assert.equal(isValidMyTasksSortBy("SMART"), true);
+assert.equal(isValidMyTasksSortBy("DUE_DATE"), true);
+assert.equal(isValidMyTasksSortBy("bogus"), false);
+assert.equal(isValidMyTasksGroupBy("WORKSPACE"), true);
+assert.equal(isValidMyTasksGroupBy("bogus"), false);
+
+// applyMyTasksSort: each non-SMART mode overrides the default ordering.
+{
+  const items = [
+    { id: "b", title: "Bravo", priority: "LOW" as const, dueDate: new Date("2026-09-20T00:00:00.000Z") },
+    { id: "a", title: "Alpha", priority: "HIGH" as const, dueDate: null },
+    { id: "c", title: "Charlie", priority: "NORMAL" as const, dueDate: new Date("2026-09-10T00:00:00.000Z") },
+  ];
+
+  assert.deepEqual(
+    applyMyTasksSort(items, "DUE_DATE", now).map((item) => item.id),
+    ["c", "b", "a"],
+    "DUE_DATE: nearest first, undated last"
+  );
+  assert.deepEqual(
+    applyMyTasksSort(items, "PRIORITY", now).map((item) => item.id),
+    ["a", "c", "b"],
+    "PRIORITY: High first"
+  );
+  assert.deepEqual(
+    applyMyTasksSort(items, "TITLE", now).map((item) => item.id),
+    ["a", "b", "c"],
+    "TITLE: alphabetical"
+  );
+}
+
+// groupMyTasksItems: NONE is a single unlabeled group; WORKSPACE/PRIORITY/
+// DUE_DATE bucket without dropping or duplicating any Item, and omit empty
+// buckets (#44).
+{
+  const workspaceA = { sourceWorkspaceId: "ws-a", sourceWorkspaceName: "Marketing", sourceWorkspaceKind: "SHARED" as const };
+  const personal = { sourceWorkspaceId: "ws-p", sourceWorkspaceName: "Personal Space", sourceWorkspaceKind: "PERSONAL" as const };
+  const overdue = { id: "overdue", priority: "HIGH" as const, dueDate: new Date("2026-09-01T00:00:00.000Z"), ...workspaceA };
+  const today = { id: "today", priority: "NORMAL" as const, dueDate: new Date("2026-09-15T18:00:00.000Z"), ...workspaceA };
+  const upcoming = { id: "upcoming", priority: "LOW" as const, dueDate: new Date("2026-09-20T00:00:00.000Z"), ...personal };
+  const undated = { id: "undated", priority: "LOW" as const, dueDate: null, ...personal };
+  const items = [overdue, today, upcoming, undated];
+
+  const none = groupMyTasksItems(items, "NONE", now);
+  assert.deepEqual(none, [{ key: "ALL", label: "", items }]);
+
+  const byWorkspace = groupMyTasksItems(items, "WORKSPACE", now);
+  assert.deepEqual(
+    byWorkspace.map((group) => [group.label, group.items.map((item) => item.id)]),
+    [
+      ["Marketing", ["overdue", "today"]],
+      ["Personal Space", ["upcoming", "undated"]],
+    ]
+  );
+
+  const byPriority = groupMyTasksItems(items, "PRIORITY", now);
+  assert.deepEqual(
+    byPriority.map((group) => [group.label, group.items.map((item) => item.id)]),
+    [
+      ["High", ["overdue"]],
+      ["Normal", ["today"]],
+      ["Low", ["upcoming", "undated"]],
+    ]
+  );
+
+  const byDueDate = groupMyTasksItems(items, "DUE_DATE", now);
+  assert.deepEqual(
+    byDueDate.map((group) => [group.label, group.items.map((item) => item.id)]),
+    [
+      ["Overdue", ["overdue"]],
+      ["Today", ["today"]],
+      ["Upcoming", ["upcoming"]],
+      ["No due date", ["undated"]],
+    ]
+  );
+}
+
+// myTaskItemHref: the one place the Item detail URL shape is assembled,
+// shared by every My Tasks view's row link and the Share link (#43, #44).
+assert.equal(
+  myTaskItemHref({ sourceWorkspaceId: "ws-1", listId: "list-1" }, "item-1"),
+  "/workspaces/ws-1/lists/list-1/items/item-1"
+);
 
 console.log("item my-tasks test passed");

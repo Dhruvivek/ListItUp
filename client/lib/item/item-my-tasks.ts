@@ -73,6 +73,137 @@ export function sortMyTasks<T extends { priority: ItemPriority; dueDate: Date | 
   );
 }
 
+function dueDateRank(item: { dueDate: Date | null }): number {
+  return item.dueDate?.getTime() ?? Number.POSITIVE_INFINITY;
+}
+
+function sortMyTasksByDueDate<T extends { dueDate: Date | null }>(items: T[]): T[] {
+  return [...items].sort((a, b) => dueDateRank(a) - dueDateRank(b));
+}
+
+function sortMyTasksByPriority<T extends { priority: ItemPriority; dueDate: Date | null }>(
+  items: T[]
+): T[] {
+  return [...items].sort(
+    (a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || dueDateRank(a) - dueDateRank(b)
+  );
+}
+
+function sortMyTasksByTitle<T extends { title: string }>(items: T[]): T[] {
+  return [...items].sort((a, b) => a.title.localeCompare(b.title));
+}
+
+export type MyTasksSortBy = "SMART" | "DUE_DATE" | "PRIORITY" | "TITLE";
+
+// "Smart" is the #42 default order; the rest are the explicit Sort control
+// this ticket (#44) adds on top of it (query-param-only, per #42's "not a
+// persisted per-User preference" precedent — same rationale applies here).
+const VALID_SORT_BY: readonly MyTasksSortBy[] = ["SMART", "DUE_DATE", "PRIORITY", "TITLE"];
+
+export function isValidMyTasksSortBy(value: string): value is MyTasksSortBy {
+  return (VALID_SORT_BY as readonly string[]).includes(value);
+}
+
+export function applyMyTasksSort<
+  T extends { title: string; priority: ItemPriority; dueDate: Date | null },
+>(items: T[], sortBy: MyTasksSortBy, now: Date): T[] {
+  switch (sortBy) {
+    case "DUE_DATE":
+      return sortMyTasksByDueDate(items);
+    case "PRIORITY":
+      return sortMyTasksByPriority(items);
+    case "TITLE":
+      return sortMyTasksByTitle(items);
+    case "SMART":
+      return sortMyTasks(items, now);
+  }
+}
+
+export type MyTasksGroupBy = "NONE" | "WORKSPACE" | "PRIORITY" | "DUE_DATE";
+
+const VALID_GROUP_BY: readonly MyTasksGroupBy[] = ["NONE", "WORKSPACE", "PRIORITY", "DUE_DATE"];
+
+export function isValidMyTasksGroupBy(value: string): value is MyTasksGroupBy {
+  return (VALID_GROUP_BY as readonly string[]).includes(value);
+}
+
+export type MyTasksGroup<T> = { key: string; label: string; items: T[] };
+
+const PRIORITY_LABEL: Record<ItemPriority, string> = { HIGH: "High", NORMAL: "Normal", LOW: "Low" };
+const PRIORITY_GROUP_ORDER: readonly ItemPriority[] = ["HIGH", "NORMAL", "LOW"];
+
+const DUE_DATE_GROUP_ORDER = ["OVERDUE", "TODAY", "UPCOMING", "NO_DUE_DATE"] as const;
+type DueDateGroupKey = (typeof DUE_DATE_GROUP_ORDER)[number];
+const DUE_DATE_GROUP_LABEL: Record<DueDateGroupKey, string> = {
+  OVERDUE: "Overdue",
+  TODAY: "Today",
+  UPCOMING: "Upcoming",
+  NO_DUE_DATE: "No due date",
+};
+
+function isSameCalendarDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function dueDateGroupKey(item: { dueDate: Date | null }, now: Date): DueDateGroupKey {
+  if (item.dueDate === null) return "NO_DUE_DATE";
+  if (isItemOverdue(item, now)) return "OVERDUE";
+  if (isSameCalendarDay(item.dueDate, now)) return "TODAY";
+  return "UPCOMING";
+}
+
+// Grouping is a client-facing arrangement of the already-filtered,
+// already-sorted Item set (#44) — it never changes which Items are
+// included, only how they're bucketed for display. "NONE" is represented
+// as a single unlabeled group so callers always get a uniform shape.
+export function groupMyTasksItems<
+  T extends {
+    priority: ItemPriority;
+    dueDate: Date | null;
+    sourceWorkspaceId: string;
+    sourceWorkspaceName: string;
+    sourceWorkspaceKind: WorkspaceKind;
+  },
+>(items: T[], groupBy: MyTasksGroupBy, now: Date): MyTasksGroup<T>[] {
+  if (groupBy === "NONE") {
+    return [{ key: "ALL", label: "", items }];
+  }
+
+  if (groupBy === "WORKSPACE") {
+    const groups = new Map<string, MyTasksGroup<T>>();
+    for (const item of items) {
+      const label = item.sourceWorkspaceKind === "PERSONAL" ? "Personal Space" : item.sourceWorkspaceName;
+      const group = groups.get(item.sourceWorkspaceId) ?? { key: item.sourceWorkspaceId, label, items: [] };
+      group.items.push(item);
+      groups.set(item.sourceWorkspaceId, group);
+    }
+    return [...groups.values()];
+  }
+
+  if (groupBy === "PRIORITY") {
+    const byPriority = new Map<ItemPriority, T[]>();
+    for (const item of items) {
+      byPriority.set(item.priority, [...(byPriority.get(item.priority) ?? []), item]);
+    }
+    return PRIORITY_GROUP_ORDER.filter((priority) => byPriority.has(priority)).map((priority) => ({
+      key: priority,
+      label: PRIORITY_LABEL[priority],
+      items: byPriority.get(priority) ?? [],
+    }));
+  }
+
+  const byDueDateGroup = new Map<DueDateGroupKey, T[]>();
+  for (const item of items) {
+    const key = dueDateGroupKey(item, now);
+    byDueDateGroup.set(key, [...(byDueDateGroup.get(key) ?? []), item]);
+  }
+  return DUE_DATE_GROUP_ORDER.filter((key) => byDueDateGroup.has(key)).map((key) => ({
+    key,
+    label: DUE_DATE_GROUP_LABEL[key],
+    items: byDueDateGroup.get(key) ?? [],
+  }));
+}
+
 function toMyTaskItem(
   item: Item & {
     list: { id: string; name: string; workspaceId: string; workspace: { id: string; name: string; kind: WorkspaceKind } };
@@ -111,6 +242,8 @@ export async function loadMyTasksItems(
     sourceWorkspaceId?: string;
     includeCompleted?: boolean;
     includeArchived?: boolean;
+    search?: string;
+    sortBy?: MyTasksSortBy;
     now?: Date;
   }
 ): Promise<MyTaskItem[]> {
@@ -119,13 +252,18 @@ export async function loadMyTasksItems(
     sourceWorkspaceId,
     includeCompleted = false,
     includeArchived = false,
+    search,
+    sortBy = "SMART",
     now = new Date(),
   } = input;
 
   const assignments = await database.itemAssignee.findMany({
     where: {
       userId,
-      ...(sourceWorkspaceId ? { item: { list: { workspaceId: sourceWorkspaceId } } } : {}),
+      item: {
+        ...(sourceWorkspaceId ? { list: { workspaceId: sourceWorkspaceId } } : {}),
+        ...(search ? { title: { contains: search, mode: "insensitive" as const } } : {}),
+      },
     },
     include: {
       item: {
@@ -145,5 +283,5 @@ export async function loadMyTasksItems(
       return true;
     });
 
-  return sortMyTasks(visibleItems.map(toMyTaskItem), now);
+  return applyMyTasksSort(visibleItems.map(toMyTaskItem), sortBy, now);
 }

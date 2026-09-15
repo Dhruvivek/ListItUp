@@ -153,6 +153,38 @@ async function run() {
       assert.ok(withArchived.some((item) => item.title === "Old task"));
     }
 
+    // Search filters the unified set by title, case-insensitively, without
+    // touching visibility/sort defaults (#44).
+    {
+      const userId = await createUser();
+      const { workspaceId, listId } = await createWorkspaceWithList("Ops");
+      await addMember(workspaceId, listId, userId);
+
+      const matchId = await createItem(listId, userId, { title: "Fix the platform signage" });
+      const otherId = await createItem(listId, userId, { title: "Draft onboarding checklist" });
+      await assign(matchId, userId);
+      await assign(otherId, userId);
+
+      const results = await loadMyTasksItems(prisma, { userId, search: "SIGNAGE" });
+      assert.deepEqual(results.map((item) => item.title), ["Fix the platform signage"]);
+    }
+
+    // sortBy overrides the default order (#44); PRIORITY here since it's
+    // observably different from SMART for this fixture.
+    {
+      const userId = await createUser();
+      const { workspaceId, listId } = await createWorkspaceWithList("Ops");
+      await addMember(workspaceId, listId, userId);
+
+      const lowId = await createItem(listId, userId, { title: "Low priority", priority: "LOW", dueDate: new Date("2026-09-01T00:00:00.000Z") });
+      const highId = await createItem(listId, userId, { title: "High priority", priority: "HIGH", dueDate: new Date("2026-09-30T00:00:00.000Z") });
+      await assign(lowId, userId);
+      await assign(highId, userId);
+
+      const byPriority = await loadMyTasksItems(prisma, { userId, sortBy: "PRIORITY" });
+      assert.deepEqual(byPriority.map((item) => item.title), ["High priority", "Low priority"]);
+    }
+
     // Completing an Item from My Tasks calls the same lib/item mutation as
     // elsewhere: complete via the My Tasks path, then read the Item through
     // its source List and assert identical state — not a copy (#42).

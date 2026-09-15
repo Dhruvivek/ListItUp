@@ -23,7 +23,8 @@ export async function completeMyTaskItemAction(itemId: string): Promise<void> {
 // and creates the Item through lib/item/item-quick-add.ts, which itself
 // calls lib/item/'s existing createItem rather than a parallel path. An
 // empty or shorthand-only submission is a silent no-op, same as the List
-// page's "Add an Item" form handles a blank title.
+// page's "Add an Item" form handles a blank title. This is Add Task's
+// (#44) implementation — no separate Quick-Add path is added here.
 export async function quickAddItemAction(formData: FormData): Promise<void> {
   const session = await requireAuthenticatedSession(MY_TASKS_PATH);
   const text = String(formData.get("quickAddText") ?? "").trim();

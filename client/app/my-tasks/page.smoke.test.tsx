@@ -64,8 +64,9 @@ async function run() {
 
       const data = await loadMyTasksPageData(prisma, { userId });
 
-      assert.equal(data.items.length, 1);
-      assert.equal(data.items[0].title, "Campaign brief");
+      assert.equal(data.groups.length, 1, "ungrouped by default: a single unlabeled group");
+      assert.equal(data.groups[0].items.length, 1);
+      assert.equal(data.groups[0].items[0].title, "Campaign brief");
       assert.equal(data.selectedWorkspaceId, null);
       assert.equal(data.includeCompleted, false);
       assert.equal(data.includeArchived, false);
@@ -96,7 +97,35 @@ async function run() {
       const data = await loadMyTasksPageData(prisma, { userId, sourceWorkspaceId: workspaceA.workspaceId });
 
       assert.equal(data.selectedWorkspaceId, workspaceA.workspaceId);
-      assert.deepEqual(data.items.map((item) => item.title), ["A task"]);
+      assert.deepEqual(data.groups[0].items.map((item) => item.title), ["A task"]);
+    }
+
+    // Search and Group threading (#44): a text query narrows the unified
+    // set, and grouping arranges it without dropping or duplicating Items.
+    {
+      const userId = await createUser();
+      const workspaceA = await createWorkspaceWithList("Marketing");
+      await joinWorkspace(workspaceA.workspaceId, workspaceA.listId, userId);
+      const personal = await createWorkspaceWithList("Personal Space", "PERSONAL");
+      await joinWorkspace(personal.workspaceId, personal.listId, userId);
+
+      const matchItem = await prisma.item.create({
+        data: { id: randomUUID(), listId: workspaceA.listId, creatorId: userId, title: "Fix platform signage" },
+      });
+      await prisma.itemAssignee.create({ data: { id: randomUUID(), itemId: matchItem.id, userId } });
+      const otherItem = await prisma.item.create({
+        data: { id: randomUUID(), listId: personal.listId, creatorId: userId, title: "Buy groceries" },
+      });
+      await prisma.itemAssignee.create({ data: { id: randomUUID(), itemId: otherItem.id, userId } });
+
+      const searched = await loadMyTasksPageData(prisma, { userId, search: "signage" });
+      assert.deepEqual(searched.groups[0].items.map((item) => item.title), ["Fix platform signage"]);
+      assert.equal(searched.search, "signage");
+
+      const grouped = await loadMyTasksPageData(prisma, { userId, groupBy: "WORKSPACE" });
+      assert.equal(grouped.groupBy, "WORKSPACE");
+      const totalGroupedItems = grouped.groups.reduce((sum, group) => sum + group.items.length, 0);
+      assert.equal(totalGroupedItems, 2, "grouping must not drop or duplicate Items");
     }
 
     // Board/Calendar/Files (#43) all read the same effective-access Item
