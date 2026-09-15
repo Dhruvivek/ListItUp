@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { PrismaClient } from "@/generated/prisma/client";
+import { notifyNoteCreated } from "@/lib/notification/notification-triggers";
 import { resolveItemAccess } from "@/lib/permissions/item-access";
 import { meetsListAccessLevel } from "@/lib/permissions/list-access";
 
@@ -54,6 +55,7 @@ export async function createNote(
       },
     },
   });
+  await notifyNoteCreated(database, { actorUserId, itemId, noteId, mentionedUserIds });
 
   return { status: "created", noteId };
 }

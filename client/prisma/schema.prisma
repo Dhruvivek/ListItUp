@@ -30,6 +30,8 @@ model User {
   authoredNotes    Note[]         @relation("NoteAuthor")
   mentions         Mention[]      @relation("MentionedUser")
   personalNotes    PersonalNote[] @relation("PersonalNoteOwner")
+  notifications    Notification[] @relation("NotificationRecipient")
+  triggeredNotifications Notification[] @relation("NotificationActor")
   platformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentUser")
   grantedPlatformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentGranter")
   revokedPlatformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentRevoker")
@@ -315,6 +317,7 @@ model Item {
   attachments Attachment[]
   notes         Note[]
   personalNotes PersonalNote[]
+  notifications Notification[]
 
   @@index([listId])
   @@index([sectionId])
@@ -458,6 +461,7 @@ model Note {
   item      Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
   author    User      @relation("NoteAuthor", fields: [authorId], references: [id])
   mentions  Mention[]
+  notifications Notification[]
 
   @@index([itemId])
   @@map("note")
@@ -494,6 +498,53 @@ model PersonalNote {
 
   @@unique([itemId, userId])
   @@map("personal_note")
+}
+
+enum NotificationType {
+  ASSIGNEE_ADDED
+  ASSIGNEE_REMOVED
+  NOTE_ADDED
+  MENTIONED
+  STATE_CHANGED
+  DUE_DATE_REMINDER
+}
+
+// Delivery record for the Updates surface (CONTEXT.md) — always scoped to
+// exactly one recipient, so per-recipient read/bookmarked/archived state
+// lives directly on this row rather than a separate shared-state table
+// (#41). Created by lib/notification/'s trigger functions on Assignee-list
+// change, Note creation (including @Mention resolution), Item lifecycle
+// state change, and a due-date-approaching schedule; never edited by any
+// other lib/ module.
+model Notification {
+  id          String            @id
+  recipientId String
+  type        NotificationType
+  itemId      String
+  // The User whose action produced this notification; null for the
+  // system-triggered DUE_DATE_REMINDER type, which has no actor.
+  actorId     String?
+  // Set only for NOTE_ADDED/MENTIONED, linking back to the triggering Note.
+  noteId      String?
+  // Snapshot of the Item's dueDate at DUE_DATE_REMINDER creation time, used
+  // by the dedup constraint below so a reminder fires once per approaching
+  // deadline rather than once per scheduler run (#41) — null for every
+  // other type.
+  dueDateAt   DateTime?
+  readAt       DateTime?
+  bookmarkedAt DateTime?
+  archivedAt   DateTime?
+  createdAt   DateTime          @default(now())
+
+  recipient User  @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor     User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  item      Item  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  note      Note? @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@unique([recipientId, itemId, type, dueDateAt])
+  @@index([recipientId, createdAt])
+  @@index([recipientId, type])
+  @@map("notification")
 }
 
 // Better Auth's email-verification tokens are stateless signed JWTs and are

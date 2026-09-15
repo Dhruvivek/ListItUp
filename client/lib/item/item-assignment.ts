@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { PrismaClient } from "@/generated/prisma/client";
+import { notifyAssigneeAdded, notifyAssigneeRemoved } from "@/lib/notification/notification-triggers";
 import { resolveItemAccess } from "@/lib/permissions/item-access";
 import { meetsListAccessLevel } from "@/lib/permissions/list-access";
 
@@ -40,6 +41,7 @@ export async function addAssignee(
     create: { id: randomUUID(), itemId, userId },
     update: {},
   });
+  await notifyAssigneeAdded(database, { actorUserId, itemId, assigneeUserId: userId });
 
   return { status: "added" };
 }
@@ -61,5 +63,7 @@ export async function removeAssignee(
   }
 
   await database.itemAssignee.deleteMany({ where: { itemId, userId } });
+  await notifyAssigneeRemoved(database, { actorUserId, itemId, assigneeUserId: userId });
+
   return { status: "removed" };
 }
