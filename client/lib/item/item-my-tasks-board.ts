@@ -1,5 +1,5 @@
 import type { ItemPriority, ItemState, PrismaClient } from "@/generated/prisma/client";
-import type { MyTaskItem } from "@/lib/item/item-my-tasks";
+import { myTaskWorkspaceLabel, type MyTaskItem } from "@/lib/item/item-my-tasks";
 import { transitionItemState, updateItem } from "@/lib/item/item-lifecycle";
 
 // My Tasks' Board groups a cross-Workspace Item set, so List Board's own
@@ -69,7 +69,7 @@ export function groupMyTasksForBoard(
     if (!column) {
       column = {
         key: item.sourceWorkspaceId,
-        label: item.sourceWorkspaceKind === "PERSONAL" ? "Personal Space" : item.sourceWorkspaceName,
+        label: myTaskWorkspaceLabel(item),
         items: [],
       };
       columnByWorkspaceId.set(item.sourceWorkspaceId, column);

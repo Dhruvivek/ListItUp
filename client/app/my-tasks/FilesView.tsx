@@ -1,4 +1,5 @@
 import { formatAttachmentSize } from "@/lib/item/item-attachments";
+import { myTaskItemHref, myTaskWorkspaceLabel } from "@/lib/item/item-my-tasks";
 import type { MyTasksFileEntry } from "@/lib/item/item-my-tasks-files";
 
 function formatDate(date: Date): string {
@@ -29,7 +30,7 @@ export function FilesView({ entries }: { entries: MyTasksFileEntry[] }) {
               {entry.fileName}
             </a>
             <a
-              href={`/workspaces/${entry.sourceWorkspaceId}/lists/${entry.listId}/items/${entry.itemId}`}
+              href={myTaskItemHref(entry, entry.itemId)}
               className="block truncate text-xs text-neutral-500 hover:text-neutral-300 hover:underline"
             >
               {entry.itemTitle}
@@ -40,9 +41,7 @@ export function FilesView({ entries }: { entries: MyTasksFileEntry[] }) {
             <div>
               {entry.uploaderName} · {formatDate(entry.createdAt)}
             </div>
-            <div className="font-mono uppercase tracking-wider text-neutral-700">
-              {entry.sourceWorkspaceKind === "PERSONAL" ? "Personal Space" : entry.sourceWorkspaceName}
-            </div>
+            <div className="font-mono uppercase tracking-wider text-neutral-700">{myTaskWorkspaceLabel(entry)}</div>
           </div>
         </div>
       ))}

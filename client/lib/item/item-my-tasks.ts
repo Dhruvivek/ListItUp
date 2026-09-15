@@ -26,6 +26,20 @@ export type MyTaskItem = {
   attachments: MyTaskAttachment[];
 };
 
+// Shared by every My Tasks view (List row, Board card, Files entry) so the
+// Personal Space label and an Item's link back to its source List read the
+// same way everywhere rather than re-deriving them per view (#43).
+export function myTaskWorkspaceLabel(source: {
+  sourceWorkspaceKind: WorkspaceKind;
+  sourceWorkspaceName: string;
+}): string {
+  return source.sourceWorkspaceKind === "PERSONAL" ? "Personal Space" : source.sourceWorkspaceName;
+}
+
+export function myTaskItemHref(source: { sourceWorkspaceId: string; listId: string }, itemId: string): string {
+  return `/workspaces/${source.sourceWorkspaceId}/lists/${source.listId}/items/${itemId}`;
+}
+
 // Hidden from My Tasks unless explicitly requested via includeCompleted/
 // includeArchived — every other state (including IN_PROGRESS) shows by
 // default (#42).

@@ -1,3 +1,4 @@
+import { myTaskItemHref } from "@/lib/item/item-my-tasks";
 import type { MyTasksCalendarCell } from "@/lib/item/item-my-tasks-calendar";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -52,7 +53,7 @@ export function CalendarView({
                 {cell.items.slice(0, MAX_VISIBLE_ITEMS_PER_DAY).map((item) => (
                   <a
                     key={item.id}
-                    href={`/workspaces/${item.sourceWorkspaceId}/lists/${item.listId}/items/${item.id}`}
+                    href={myTaskItemHref(item, item.id)}
                     className="truncate rounded bg-[#141414] px-1 py-0.5 text-[10px] text-neutral-300 hover:text-white hover:underline"
                   >
                     {item.title}

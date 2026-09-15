@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import type { MyTaskItem } from "@/lib/item/item-my-tasks";
+import { myTaskItemHref, myTaskWorkspaceLabel, type MyTaskItem } from "@/lib/item/item-my-tasks";
 import type { MyTasksBoardColumn, MyTasksBoardGroupBy } from "@/lib/item/item-my-tasks-board";
 
 const PRIORITY_LABEL: Record<MyTaskItem["priority"], string> = {
@@ -102,16 +102,14 @@ export function BoardView({
                 {column.items.map((item) => (
                   <div key={item.id} className="rounded-md border border-neutral-800 bg-[#141414] p-2">
                     <a
-                      href={`/workspaces/${item.sourceWorkspaceId}/lists/${item.listId}/items/${item.id}`}
+                      href={myTaskItemHref(item, item.id)}
                       className="block text-sm text-neutral-200 hover:text-white hover:underline"
                     >
                       {item.hasParent && <span className="mr-1 text-neutral-600">↳</span>}
                       {item.title}
                     </a>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-neutral-500">
-                      <span className="font-mono uppercase tracking-wider">
-                        {item.sourceWorkspaceKind === "PERSONAL" ? "Personal Space" : item.sourceWorkspaceName}
-                      </span>
+                      <span className="font-mono uppercase tracking-wider">{myTaskWorkspaceLabel(item)}</span>
                       {item.priority !== "NORMAL" && (
                         <span className="font-mono uppercase">{PRIORITY_LABEL[item.priority]}</span>
                       )}

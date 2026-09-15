@@ -15,10 +15,11 @@ export type MyTasksCalendarCell = {
   items: MyTaskItem[];
 };
 
-// Places assigned Items on the day of their due date (#43, matching #32's
-// choice for the List page's Calendar). Items with no due date have no day
-// to render on and are excluded entirely, the same choice #33's Timeline
-// view already made for the same reason.
+// Places assigned Items on the day of their due date (#43) — the List
+// page's own Calendar (#32) hasn't shipped yet, so there's no existing
+// List-page precedent to match here. Items with no due date have no day to
+// render on and are excluded entirely, the same choice #33's Timeline view
+// already made for the same reason.
 //
 // Pure — the grid-building and day-bucketing shape is unit tested directly
 // without a database. `monthStart` must be UTC-midnight on the 1st of the
