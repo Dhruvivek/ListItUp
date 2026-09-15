@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { ItemState, PrismaClient } from "@/generated/prisma/client";
+import { excludingMutedRecipients } from "@/lib/notification/notification-preferences";
 import { resolveItemAccess } from "@/lib/permissions/item-access";
 import { meetsListAccessLevel } from "@/lib/permissions/list-access";
 
@@ -10,10 +11,20 @@ import { meetsListAccessLevel } from "@/lib/permissions/list-access";
 // archived Item never gets a reminder; there is nothing left to do.
 export const DUE_DATE_REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-const REMINDABLE_STATES: readonly ItemState[] = ["TO_DO", "IN_PROGRESS", "BLOCKED"];
+const REMINDABLE_STATES: readonly ItemState[] = [
+  "TO_DO",
+  "IN_PROGRESS",
+  "BLOCKED",
+];
 
-async function getItemAssigneeIds(database: PrismaClient, itemId: string): Promise<string[]> {
-  const assignees = await database.itemAssignee.findMany({ where: { itemId }, select: { userId: true } });
+async function getItemAssigneeIds(
+  database: PrismaClient,
+  itemId: string
+): Promise<string[]> {
+  const assignees = await database.itemAssignee.findMany({
+    where: { itemId },
+    select: { userId: true },
+  });
   return assignees.map((assignee) => assignee.userId);
 }
 
@@ -32,8 +43,22 @@ export async function notifyAssigneeAdded(
     return;
   }
 
+  const recipients = await excludingMutedRecipients(database, {
+    recipientIds: [assigneeUserId],
+    type: "ASSIGNEE_ADDED",
+  });
+  if (recipients.length === 0) {
+    return;
+  }
+
   await database.notification.create({
-    data: { id: randomUUID(), recipientId: assigneeUserId, type: "ASSIGNEE_ADDED", itemId, actorId: actorUserId },
+    data: {
+      id: randomUUID(),
+      recipientId: assigneeUserId,
+      type: "ASSIGNEE_ADDED",
+      itemId,
+      actorId: actorUserId,
+    },
   });
 }
 
@@ -46,8 +71,22 @@ export async function notifyAssigneeRemoved(
     return;
   }
 
+  const recipients = await excludingMutedRecipients(database, {
+    recipientIds: [assigneeUserId],
+    type: "ASSIGNEE_REMOVED",
+  });
+  if (recipients.length === 0) {
+    return;
+  }
+
   await database.notification.create({
-    data: { id: randomUUID(), recipientId: assigneeUserId, type: "ASSIGNEE_REMOVED", itemId, actorId: actorUserId },
+    data: {
+      id: randomUUID(),
+      recipientId: assigneeUserId,
+      type: "ASSIGNEE_REMOVED",
+      itemId,
+      actorId: actorUserId,
+    },
   });
 }
 
@@ -61,33 +100,63 @@ export async function notifyAssigneeRemoved(
 // stays correct even if a future caller skips createNote's own check (#41).
 export async function notifyNoteCreated(
   database: PrismaClient,
-  input: { actorUserId: string; itemId: string; noteId: string; mentionedUserIds?: string[] }
+  input: {
+    actorUserId: string;
+    itemId: string;
+    noteId: string;
+    mentionedUserIds?: string[];
+  }
 ): Promise<void> {
   const { actorUserId, itemId, noteId } = input;
 
   const assigneeIds = await getItemAssigneeIds(database, itemId);
-  const noteRecipients = excludingActor(assigneeIds, actorUserId);
+  const noteRecipients = await excludingMutedRecipients(database, {
+    recipientIds: excludingActor(assigneeIds, actorUserId),
+    type: "NOTE_ADDED",
+  });
   await Promise.all(
     noteRecipients.map((recipientId) =>
       database.notification.create({
-        data: { id: randomUUID(), recipientId, type: "NOTE_ADDED", itemId, actorId: actorUserId, noteId },
+        data: {
+          id: randomUUID(),
+          recipientId,
+          type: "NOTE_ADDED",
+          itemId,
+          actorId: actorUserId,
+          noteId,
+        },
       })
     )
   );
 
-  const mentionedUserIds = excludingActor([...new Set(input.mentionedUserIds ?? [])], actorUserId);
+  const mentionedUserIds = excludingActor(
+    [...new Set(input.mentionedUserIds ?? [])],
+    actorUserId
+  );
   const accessByUserId = await Promise.all(
     mentionedUserIds.map(async (userId) => {
       const access = await resolveItemAccess(database, { userId, itemId });
       return { userId, hasAccess: meetsListAccessLevel(access, "READ") };
     })
   );
-  const mentionRecipients = accessByUserId.filter((entry) => entry.hasAccess).map((entry) => entry.userId);
+  const mentionRecipients = await excludingMutedRecipients(database, {
+    recipientIds: accessByUserId
+      .filter((entry) => entry.hasAccess)
+      .map((entry) => entry.userId),
+    type: "MENTIONED",
+  });
 
   await Promise.all(
     mentionRecipients.map((recipientId) =>
       database.notification.create({
-        data: { id: randomUUID(), recipientId, type: "MENTIONED", itemId, actorId: actorUserId, noteId },
+        data: {
+          id: randomUUID(),
+          recipientId,
+          type: "MENTIONED",
+          itemId,
+          actorId: actorUserId,
+          noteId,
+        },
       })
     )
   );
@@ -103,11 +172,20 @@ export async function notifyItemStateChanged(
   const { actorUserId, itemId } = input;
 
   const assigneeIds = await getItemAssigneeIds(database, itemId);
-  const recipients = excludingActor(assigneeIds, actorUserId);
+  const recipients = await excludingMutedRecipients(database, {
+    recipientIds: excludingActor(assigneeIds, actorUserId),
+    type: "STATE_CHANGED",
+  });
   await Promise.all(
     recipients.map((recipientId) =>
       database.notification.create({
-        data: { id: randomUUID(), recipientId, type: "STATE_CHANGED", itemId, actorId: actorUserId },
+        data: {
+          id: randomUUID(),
+          recipientId,
+          type: "STATE_CHANGED",
+          itemId,
+          actorId: actorUserId,
+        },
       })
     )
   );
@@ -144,8 +222,15 @@ export async function createDueDateReminders(
   const upperBound = new Date(input.now.getTime() + windowMs);
 
   const items = await database.item.findMany({
-    where: { dueDate: { gte: input.now, lte: upperBound }, state: { in: [...REMINDABLE_STATES] } },
-    select: { id: true, dueDate: true, assignees: { select: { userId: true } } },
+    where: {
+      dueDate: { gte: input.now, lte: upperBound },
+      state: { in: [...REMINDABLE_STATES] },
+    },
+    select: {
+      id: true,
+      dueDate: true,
+      assignees: { select: { userId: true } },
+    },
   });
 
   for (const item of items) {
@@ -153,11 +238,16 @@ export async function createDueDateReminders(
       continue;
     }
 
-    for (const assignee of item.assignees) {
+    const recipients = await excludingMutedRecipients(database, {
+      recipientIds: item.assignees.map((assignee) => assignee.userId),
+      type: "DUE_DATE_REMINDER",
+    });
+
+    for (const recipientId of recipients) {
       await database.notification.upsert({
         where: {
           recipientId_itemId_type_dueDateAt: {
-            recipientId: assignee.userId,
+            recipientId,
             itemId: item.id,
             type: "DUE_DATE_REMINDER",
             dueDateAt: item.dueDate,
@@ -165,7 +255,7 @@ export async function createDueDateReminders(
         },
         create: {
           id: randomUUID(),
-          recipientId: assignee.userId,
+          recipientId,
           itemId: item.id,
           type: "DUE_DATE_REMINDER",
           dueDateAt: item.dueDate,

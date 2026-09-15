@@ -32,6 +32,7 @@ model User {
   personalNotes    PersonalNote[] @relation("PersonalNoteOwner")
   notifications    Notification[] @relation("NotificationRecipient")
   triggeredNotifications Notification[] @relation("NotificationActor")
+  mutedNotificationTypes MutedNotificationType[]
   platformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentUser")
   grantedPlatformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentGranter")
   revokedPlatformRoleAssignments PlatformRoleAssignment[] @relation("PlatformRoleAssignmentRevoker")
@@ -545,6 +546,24 @@ model Notification {
   @@index([recipientId, createdAt])
   @@index([recipientId, type])
   @@map("notification")
+}
+
+// A User's opt-out from a NotificationType on the Manage Notifications page
+// (#48). Presence of a row means disabled; absence means enabled, so a
+// newly added NotificationType defaults to on without a migration or every
+// User needing a row for every type (mirrors Starred's presence-only
+// pattern). Checked at trigger time in notification-triggers.ts, not just
+// filtered out of the Activity list.
+model MutedNotificationType {
+  id        String           @id
+  userId    String
+  type      NotificationType
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@map("muted_notification_type")
 }
 
 // Better Auth's email-verification tokens are stateless signed JWTs and are
