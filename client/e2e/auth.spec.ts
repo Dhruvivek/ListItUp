@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./support/fixtures";
 
 import { signUp, signUpAndVerify, uniqueTestUser } from "./support/auth-flows";
 import { knownMailpitMessageIds, waitForMailpitLink } from "./support/mailpit";

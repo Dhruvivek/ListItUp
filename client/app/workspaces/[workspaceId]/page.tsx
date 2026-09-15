@@ -34,7 +34,11 @@ export default async function WorkspacePage({
       <div className="mx-auto max-w-3xl">
         <div className="mb-8 flex items-center gap-4">
           <span className="h-px w-14 bg-[#ff6b4a]" />
-          <span className="font-mono text-xs uppercase tracking-[0.24em] text-[#ff6b4a]">
+          <span
+            role="heading"
+            aria-level={2}
+            className="font-mono text-xs uppercase tracking-[0.24em] text-[#ff6b4a]"
+          >
             {"// " + data.workspaceName}
           </span>
         </div>
