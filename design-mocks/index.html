@@ -21,7 +21,7 @@
   <div class="max-w-5xl mx-auto px-8 py-14">
     <div class="font-mono-label text-[11px] mb-3" style="color:var(--orange-light)">ListItUp · Design Mocks</div>
     <h1 class="text-[30px] font-semibold tracking-tight mb-2" style="color:var(--ink)">Page mockups awaiting review</h1>
-    <p class="text-[13.5px] max-w-xl mb-8" style="color:var(--ink-muted)">Static HTML/Tailwind prototypes, one folder per page, styled from <code class="font-mono-label normal-case" style="color:var(--ink)">DESIGN.md</code>. Nothing here is wired to the app yet — once a design is finalized it gets implemented in <code class="font-mono-label normal-case" style="color:var(--ink)">client/app/</code>.</p>
+    <p class="text-[13.5px] max-w-xl mb-8" style="color:var(--ink-muted)">Static HTML/Tailwind prototypes, one folder per page, styled from <code class="font-mono-label normal-case" style="color:var(--ink)">DESIGN.md</code>. Home, My Tasks, and List View are now wired into <code class="font-mono-label normal-case" style="color:var(--ink)">client/app/</code> — List Dashboard is still mock-only.</p>
 
     <a class="mock-card block mb-10" href="mother/index.html">
       <div class="ln-card p-6" style="border-color:var(--orange); background:linear-gradient(135deg, var(--bg-2), var(--bg-3))">
@@ -49,7 +49,7 @@
         <div class="ln-card">
           <div class="flex items-center justify-between mb-3">
             <i data-lucide="home" class="w-5 h-5" style="color:var(--orange-light)"></i>
-            <span class="ln-badge ln-badge-green">Ready for review</span>
+            <span class="ln-badge ln-badge-blue">Wired — app/workspaces/[workspaceId]</span>
           </div>
           <div class="text-[15px] font-semibold mb-1" style="color:var(--ink)">Home</div>
           <div class="text-[12.5px]" style="color:var(--ink-muted)">Greeting header, My Tasks preview, Recent Lists, Items I've Assigned — #46</div>
@@ -60,7 +60,7 @@
         <div class="ln-card">
           <div class="flex items-center justify-between mb-3">
             <i data-lucide="list-checks" class="w-5 h-5" style="color:var(--orange-light)"></i>
-            <span class="ln-badge ln-badge-green">Ready for review</span>
+            <span class="ln-badge ln-badge-blue">Wired — app/my-tasks</span>
           </div>
           <div class="text-[15px] font-semibold mb-1" style="color:var(--ink)">My Tasks</div>
           <div class="text-[12.5px]" style="color:var(--ink-muted)">Quick-Add, filters, default sort/visibility, view tabs — #42–45</div>
@@ -71,7 +71,7 @@
         <div class="ln-card">
           <div class="flex items-center justify-between mb-3">
             <i data-lucide="layout-list" class="w-5 h-5" style="color:var(--orange-light)"></i>
-            <span class="ln-badge ln-badge-green">Ready for review</span>
+            <span class="ln-badge ln-badge-blue">Wired — app/workspaces/.../lists/[listId]</span>
           </div>
           <div class="text-[15px] font-semibold mb-1" style="color:var(--ink)">List View</div>
           <div class="text-[12.5px]" style="color:var(--ink-muted)">Sections, item rows, item-detail drawer with all facets — #29, #30, #34, #35, #37</div>
@@ -82,7 +82,7 @@
         <div class="ln-card">
           <div class="flex items-center justify-between mb-3">
             <i data-lucide="bar-chart-3" class="w-5 h-5" style="color:var(--orange-light)"></i>
-            <span class="ln-badge ln-badge-green">Ready for review</span>
+            <span class="ln-badge ln-badge-green">Ready for review — not wired yet</span>
           </div>
           <div class="text-[15px] font-semibold mb-1" style="color:var(--ink)">List Dashboard</div>
           <div class="text-[12.5px]" style="color:var(--ink-muted)">Counts, heatmap, progress, contribution map, radar, peer comparison — #51, #54–58</div>
@@ -92,18 +92,10 @@
 
     <div class="font-mono-label text-[11px] mb-4" style="color:var(--ink-faint)">Up next — not built yet</div>
     <div class="grid grid-cols-3 gap-3">
-      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">List Browsing</div><div class="text-[11px]" style="color:var(--ink-faint)">#26</div></div>
-      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">List Overview tab</div><div class="text-[11px]" style="color:var(--ink-faint)">#27</div></div>
-      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">List Roles &amp; Guests</div><div class="text-[11px]" style="color:var(--ink-faint)">#28</div></div>
-      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">Board View</div><div class="text-[11px]" style="color:var(--ink-faint)">#31</div></div>
       <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">Calendar View</div><div class="text-[11px]" style="color:var(--ink-faint)">#32</div></div>
-      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">Timeline View</div><div class="text-[11px]" style="color:var(--ink-faint)">#33</div></div>
-      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">Files View</div><div class="text-[11px]" style="color:var(--ink-faint)">#36</div></div>
-      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">Archived Items</div><div class="text-[11px]" style="color:var(--ink-faint)">#38</div></div>
-      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">Profile</div><div class="text-[11px]" style="color:var(--ink-faint)">#40</div></div>
-      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">Updates</div><div class="text-[11px]" style="color:var(--ink-faint)">#47–49</div></div>
       <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">My Tasks Dashboard</div><div class="text-[11px]" style="color:var(--ink-faint)">#52</div></div>
-      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">Workspace Switcher / Nav</div><div class="text-[11px]" style="color:var(--ink-faint)">#39</div></div>
+      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">Updates: Manage Notifications</div><div class="text-[11px]" style="color:var(--ink-faint)">#48</div></div>
+      <div class="ln-card soon-card opacity-60"><div class="text-[13px] font-medium" style="color:var(--ink)">Updates: Bookmarks / Archive / @Mentioned</div><div class="text-[11px]" style="color:var(--ink-faint)">#49</div></div>
     </div>
   </div>
 
