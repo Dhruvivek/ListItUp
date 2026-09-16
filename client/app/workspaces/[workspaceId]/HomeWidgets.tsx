@@ -32,7 +32,7 @@ function avatarColorForName(name: string): string {
 function Avatar({ name }: { name: string }) {
   return (
     <span
-      className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full font-[family-name:var(--font-mono-label)] text-[10px] font-bold text-[#1a0800]"
+      className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 border-[#141414] font-[family-name:var(--font-mono-label)] text-[10px] font-bold text-[#1a0800]"
       style={{ backgroundColor: avatarColorForName(name) }}
       title={name}
     >
@@ -54,7 +54,7 @@ const BADGE_TONE_CLASSES: Record<BadgeTone, string> = {
 function Badge({ tone, children }: { tone: BadgeTone; children: React.ReactNode }) {
   return (
     <span
-      className={`whitespace-nowrap rounded-[5px] px-[7px] py-[2px] font-[family-name:var(--font-mono-label)] text-[10px] font-semibold tracking-wide ${BADGE_TONE_CLASSES[tone]}`}
+      className={`whitespace-nowrap rounded-[5px] px-[7px] py-[2px] font-[family-name:var(--font-mono-label)] text-[10px] font-semibold tracking-[0.05em] ${BADGE_TONE_CLASSES[tone]}`}
     >
       {children}
     </span>
@@ -80,25 +80,31 @@ function dueDateBadge(
 
 function WidgetCard({
   label,
-  seeAllHref,
+  headerRight,
   children,
 }: {
   label: string;
-  seeAllHref: string;
+  headerRight?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-[#232323] bg-[#141414] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+    <section className="rounded-[12px] border border-[#232323] bg-[#141414] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
       <div className="flex items-center justify-between">
-        <h2 className="font-[family-name:var(--font-mono-label)] text-[11px] uppercase tracking-wider text-[#5a5a56]">
+        <h2 className="font-[family-name:var(--font-mono-label)] text-[11px] uppercase tracking-[0.1em] text-[#5a5a56]">
           {label}
         </h2>
-        <a href={seeAllHref} className="flex items-center gap-1 text-[12px] font-semibold text-[#ff8a70] hover:text-[#ff6b4a]">
-          View all <ArrowRight className="h-3 w-3" />
-        </a>
+        {headerRight}
       </div>
       {children}
     </section>
+  );
+}
+
+function ViewAllLink({ href }: { href: string }) {
+  return (
+    <a href={href} className="flex items-center gap-1 text-[12px] font-semibold text-[#ff8a70] hover:text-[#ff6b4a]">
+      View all <ArrowRight className="h-3 w-3" />
+    </a>
   );
 }
 
@@ -109,16 +115,21 @@ function EmptyWidgetState({ message }: { message: string }) {
 export function MyTasksPreviewWidget({
   items,
   workspaceId,
+  workspaceName,
   viewerName,
   now,
 }: {
   items: MyTaskItem[];
   workspaceId: string;
+  workspaceName: string;
   viewerName: string;
   now: Date;
 }) {
   return (
-    <WidgetCard label="My Tasks" seeAllHref={`/my-tasks?workspace=${workspaceId}`}>
+    <WidgetCard
+      label={`My Tasks — ${workspaceName}`}
+      headerRight={<ViewAllLink href={`/my-tasks?workspace=${workspaceId}`} />}
+    >
       {items.length === 0 ? (
         <EmptyWidgetState message="No Items assigned to you here — you're all caught up." />
       ) : (
@@ -164,7 +175,7 @@ export function RecentListsWidget({
   workspaceId: string;
 }) {
   return (
-    <WidgetCard label="Recent Lists" seeAllHref={`/workspaces/${workspaceId}/lists`}>
+    <WidgetCard label="Recent Lists">
       {lists.length === 0 ? (
         <EmptyWidgetState message="No Lists here yet." />
       ) : (
@@ -202,7 +213,12 @@ export function AssignedByMeWidget({
   now: Date;
 }) {
   return (
-    <WidgetCard label="Items I've Assigned" seeAllHref={`/workspaces/${workspaceId}/lists`}>
+    <WidgetCard
+      label="Items I've Assigned"
+      headerRight={
+        <span className="text-[11px] text-[#5a5a56]">Created by you, assigned to someone else</span>
+      }
+    >
       {items.length === 0 ? (
         <EmptyWidgetState message="You haven't assigned any Items to others here yet." />
       ) : (

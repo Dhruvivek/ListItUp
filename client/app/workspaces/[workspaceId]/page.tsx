@@ -35,7 +35,7 @@ export default async function WorkspacePage({
     <div className="flex min-h-screen flex-col">
       <header className="flex h-[60px] flex-shrink-0 items-center justify-between border-b border-[#232323] bg-[#0d0d0d] px-7">
         <div className="flex items-center gap-2">
-          <span className="font-[family-name:var(--font-mono-label)] text-[11px] text-[#5a5a56]">
+          <span className="font-[family-name:var(--font-mono-label)] text-[11px] uppercase tracking-[0.08em] text-[#5a5a56]">
             Workspace
           </span>
           <ChevronRight className="h-3 w-3 text-[#5a5a56]" />
@@ -45,24 +45,24 @@ export default async function WorkspacePage({
           <button
             type="button"
             aria-label="Search"
-            className="flex h-[30px] w-[30px] items-center justify-center rounded-md border border-[#333333] bg-[#141414] text-[#8f8f8a] hover:bg-[#1a1a1a] hover:text-[#e5e5e0]"
+            className="flex h-[30px] w-[30px] items-center justify-center rounded-[6px] border border-[#333333] bg-[#141414] text-[#8f8f8a] hover:bg-[#1a1a1a] hover:text-[#e5e5e0]"
           >
             <Search className="h-[15px] w-[15px]" />
           </button>
           <a
             href="/updates"
             aria-label="Updates"
-            className="flex h-[30px] w-[30px] items-center justify-center rounded-md border border-[#333333] bg-[#141414] text-[#8f8f8a] hover:bg-[#1a1a1a] hover:text-[#e5e5e0]"
+            className="flex h-[30px] w-[30px] items-center justify-center rounded-[6px] border border-[#333333] bg-[#141414] text-[#8f8f8a] hover:bg-[#1a1a1a] hover:text-[#e5e5e0]"
           >
             <Bell className="h-[15px] w-[15px]" />
           </a>
         </div>
       </header>
 
-      <main className="flex-1 bg-[#080808] px-10 py-8">
+      <main className="flex-1 bg-[#080808] px-10 pb-16 pt-8">
         <div className="mx-auto max-w-6xl">
           <div className="mb-10">
-            <div className="mb-2 font-[family-name:var(--font-mono-label)] text-[11px] uppercase tracking-wider text-[#ff8a70]">
+            <div className="mb-2 font-[family-name:var(--font-mono-label)] text-[11px] uppercase tracking-[0.08em] text-[#ff8a70]">
               {dateLabel}
             </div>
             <h1 className="text-[32px] font-semibold tracking-tight text-[#e5e5e0]">
@@ -75,7 +75,13 @@ export default async function WorkspacePage({
 
           <div className="grid grid-cols-3 gap-5">
             <div className="col-span-2">
-              <MyTasksPreviewWidget items={data.myTasksPreview} workspaceId={workspaceId} viewerName={session.user.name} now={now} />
+              <MyTasksPreviewWidget
+                items={data.myTasksPreview}
+                workspaceId={workspaceId}
+                workspaceName={data.workspaceName}
+                viewerName={session.user.name}
+                now={now}
+              />
             </div>
             <RecentListsWidget lists={data.recentLists} workspaceId={workspaceId} />
             <div className="col-span-3">

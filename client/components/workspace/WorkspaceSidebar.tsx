@@ -43,8 +43,8 @@ function NavLink({
       href={href}
       className={
         isActive
-          ? "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13.5px] font-medium bg-[#ff6b4a24] text-[#ff8a70]"
-          : "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13.5px] font-medium text-[#8f8f8a] hover:bg-[#1a1a1a] hover:text-[#e5e5e0]"
+          ? "flex items-center gap-2.5 rounded-[6px] px-2.5 py-2 text-[13.5px] font-medium bg-[#ff6b4a24] text-[#ff8a70]"
+          : "flex items-center gap-2.5 rounded-[6px] px-2.5 py-2 text-[13.5px] font-medium text-[#8f8f8a] hover:bg-[#1a1a1a] hover:text-[#e5e5e0]"
       }
     >
       <span className={isActive ? "text-[#ff8a70]" : "text-[#5a5a56]"}>{icon}</span>
@@ -52,7 +52,7 @@ function NavLink({
       {badge !== undefined && badge > 0 && (
         <span
           aria-label={`${badge} unread notifications`}
-          className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#ff6b4a] px-1 font-[family-name:var(--font-mono-label)] text-[11px] font-bold text-[#1a0800]"
+          className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#ff6b4a] px-1 font-[family-name:var(--font-mono-label)] text-[10px] font-bold text-[#1a0800]"
         >
           {badge > 99 ? "99+" : badge}
         </span>
@@ -79,14 +79,14 @@ export function WorkspaceSidebar({
   const isUpdatesActive = pathname.startsWith("/updates");
 
   return (
-    <aside className="flex w-64 flex-shrink-0 flex-col gap-1 border-r border-[#232323] bg-[#0d0d0d] p-3">
+    <aside className="flex w-[264px] flex-shrink-0 flex-col gap-1 border-r border-[#232323] bg-[#0d0d0d] px-3 py-4">
       <div className="relative mb-2">
         <button
           type="button"
           onClick={() => setIsSwitcherOpen((open) => !open)}
           aria-expanded={isSwitcherOpen}
           aria-label="Switch Workspace"
-          className="flex w-full items-center gap-2.5 rounded-md border border-[#232323] bg-[#141414] px-2.5 py-2 text-left hover:border-[#333333]"
+          className="flex w-full items-center gap-2.5 rounded-[8px] border border-[#232323] bg-[#141414] px-2.5 py-2.5 text-left hover:border-[#333333] hover:bg-[#1a1a1a]"
         >
           <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-[#ff6b4a] font-[family-name:var(--font-mono-label)] text-xs font-bold text-[#1a0800]">
             {initialsFromName(currentWorkspaceName)}
@@ -95,7 +95,7 @@ export function WorkspaceSidebar({
             <span className="block truncate text-[13px] font-semibold text-[#e5e5e0]">
               {currentWorkspaceName}
             </span>
-            <span className="block font-[family-name:var(--font-mono-label)] text-[9px] uppercase tracking-wider text-[#5a5a56]">
+            <span className="block font-[family-name:var(--font-mono-label)] text-[9px] uppercase tracking-[0.08em] text-[#5a5a56]">
               Workspace
             </span>
           </span>
@@ -148,7 +148,7 @@ export function WorkspaceSidebar({
           onClick={() => setIsPersonalSpaceOpen((open) => !open)}
           aria-expanded={isPersonalSpaceOpen}
           disabled={!personalSpace}
-          className="flex w-full items-center gap-1.5 rounded-md px-2.5 py-1.5 font-[family-name:var(--font-mono-label)] text-[10px] uppercase tracking-wider text-[#5a5a56] hover:text-[#8f8f8a] disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex w-full items-center gap-1.5 rounded-md px-2.5 pb-1.5 pt-4 font-[family-name:var(--font-mono-label)] text-[10px] uppercase tracking-[0.14em] text-[#5a5a56] hover:text-[#8f8f8a] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isPersonalSpaceOpen ? (
             <ChevronDown className="h-3 w-3" />
