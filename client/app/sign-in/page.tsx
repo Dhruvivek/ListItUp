@@ -19,7 +19,7 @@ import {
 
 const initialSignInState: SignInFormState = { status: "idle" };
 const initialMagicLinkState: MagicLinkFormState = { status: "idle" };
-const DEFAULT_CALLBACK_URL = "/my-tasks";
+const DEFAULT_CALLBACK_URL = "/";
 
 function requiredFieldMessage(fieldName: string): string {
   return fieldName === "email"

@@ -14,7 +14,7 @@ export type ResendFormState =
   | { status: "sent" }
   | { status: "error"; message: string };
 
-const DEFAULT_RETURN_TO = "/my-tasks";
+const DEFAULT_RETURN_TO = "/";
 const RETRY_MESSAGE = "We couldn't send that email. Please try again.";
 
 function readReturnTo(formData: FormData): string {

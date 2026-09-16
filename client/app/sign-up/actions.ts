@@ -21,7 +21,7 @@ const FRIENDLY_ERROR_MESSAGES: Record<string, string> = {
 };
 
 const GENERIC_SIGN_UP_ERROR = "Something went wrong. Please try again.";
-const DEFAULT_CALLBACK_URL = "/my-tasks";
+const DEFAULT_CALLBACK_URL = "/";
 
 function readCallbackUrl(formData: FormData): string {
   const value = formData.get("callbackURL");

@@ -10,7 +10,7 @@ import { isSafeRelativeCallbackUrl } from "@/lib/session/callback-url";
 export type TwoFactorChallengeFormState =
   { status: "idle" } | { status: "error"; message: string };
 
-const DEFAULT_CALLBACK_URL = "/my-tasks";
+const DEFAULT_CALLBACK_URL = "/";
 const INVALID_CODE_MESSAGE = "That code didn't work. Try again.";
 
 function readCallbackUrl(formData: FormData): string {

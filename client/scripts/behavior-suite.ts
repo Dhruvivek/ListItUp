@@ -6,7 +6,6 @@ import {
 } from "@/lib/test/test-services";
 
 const TEST_FILES = [
-  "app/page.smoke.test.tsx",
   "lib/test/test-services.test.ts",
   "lib/auth/auth-config.test.ts",
   "lib/auth/verification-resend.test.ts",
@@ -19,10 +18,12 @@ const TEST_FILES = [
   "lib/auth/auth-email-delivery-failure.integration.test.ts",
   "lib/workspace/workspace-provisioning.test.ts",
   "lib/workspace/workspace-ownership.test.ts",
+  "lib/workspace/default-workspace.test.ts",
   "lib/auth/magic-link-tokens.test.ts",
   "lib/auth/password-reset-tokens.test.ts",
   "lib/session/callback-url.test.ts",
   "lib/session/protected-route.test.ts",
+  "lib/session/root-landing.test.ts",
   "lib/two-factor/two-factor-verification.test.ts",
   "lib/two-factor/two-factor-enrollment.test.ts",
   "lib/auth/pending-email-change.test.ts",

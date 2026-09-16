@@ -15,7 +15,7 @@ export type MagicLinkFormState =
   | { status: "sent" }
   | { status: "error"; message: string };
 
-const DEFAULT_CALLBACK_URL = "/my-tasks";
+const DEFAULT_CALLBACK_URL = "/";
 const INVALID_CREDENTIALS_MESSAGE = "Incorrect email or password.";
 const RETRY_EMAIL_MESSAGE = "We couldn't send that email. Please try again.";
 
