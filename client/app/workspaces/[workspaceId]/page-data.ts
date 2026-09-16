@@ -5,12 +5,44 @@ import { browseLists, type ListSummary } from "@/lib/list/list-browsing";
 
 const WIDGET_PREVIEW_LIMIT = 5;
 
+// Recent Lists shows "N items · X% complete" (Home's mock), a stat no
+// other List consumer needs — kept local here rather than added to the
+// shared ListSummary/browseLists contract in lib/list/list-browsing.ts.
+export type RecentListSummary = ListSummary & { itemCount: number; completionPercent: number };
+
 export type HomePageData = {
   workspaceName: string;
   myTasksPreview: MyTaskItem[];
-  recentLists: ListSummary[];
+  recentLists: RecentListSummary[];
   assignedByMe: AssignedByMeItem[];
 };
+
+async function withItemStats(
+  database: PrismaClient,
+  lists: ListSummary[]
+): Promise<RecentListSummary[]> {
+  if (lists.length === 0) return [];
+
+  const counts = await database.item.groupBy({
+    by: ["listId", "state"],
+    where: { listId: { in: lists.map((list) => list.id) } },
+    _count: { _all: true },
+  });
+
+  return lists.map((list) => {
+    const listCounts = counts.filter((count) => count.listId === list.id);
+    const itemCount = listCounts.reduce((sum, count) => sum + count._count._all, 0);
+    const completedCount = listCounts
+      .filter((count) => count.state === "COMPLETE")
+      .reduce((sum, count) => sum + count._count._all, 0);
+
+    return {
+      ...list,
+      itemCount,
+      completionPercent: itemCount === 0 ? 0 : Math.round((completedCount / itemCount) * 100),
+    };
+  });
+}
 
 // Kept separate from the page component (same rationale as My Tasks' and
 // the List page's page-data.ts): session lookup stays in page.tsx, while
@@ -42,7 +74,7 @@ export async function loadHomePageData(
   return {
     workspaceName: membership.workspace.name,
     myTasksPreview: myTasksItems.slice(0, WIDGET_PREVIEW_LIMIT),
-    recentLists: recentLists.slice(0, WIDGET_PREVIEW_LIMIT),
+    recentLists: await withItemStats(database, recentLists.slice(0, WIDGET_PREVIEW_LIMIT)),
     assignedByMe,
   };
 }

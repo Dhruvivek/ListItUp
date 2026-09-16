@@ -9,10 +9,11 @@ export type AssignedByMeItem = {
   listId: string;
   listName: string;
   assigneeCount: number;
+  assigneeNames: string[];
 };
 
 function toAssignedByMeItem(
-  item: Item & { list: { id: string; name: string }; assignees: { id: string }[] }
+  item: Item & { list: { id: string; name: string }; assignees: { user: { name: string } }[] }
 ): AssignedByMeItem {
   return {
     id: item.id,
@@ -23,6 +24,7 @@ function toAssignedByMeItem(
     listId: item.list.id,
     listName: item.list.name,
     assigneeCount: item.assignees.length,
+    assigneeNames: item.assignees.map((assignee) => assignee.user.name),
   };
 }
 
@@ -46,7 +48,7 @@ export async function loadAssignedByMeItems(
     },
     include: {
       list: { select: { id: true, name: true } },
-      assignees: true,
+      assignees: { include: { user: { select: { name: true } } } },
     },
     orderBy: { updatedAt: "desc" },
     take: limit,

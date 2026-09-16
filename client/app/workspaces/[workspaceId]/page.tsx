@@ -1,3 +1,4 @@
+import { Bell, ChevronRight, Search } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
@@ -28,32 +29,61 @@ export default async function WorkspacePage({
     month: "long",
     day: "numeric",
   });
+  const timeLabel = now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
   return (
-    <main className="min-h-screen bg-[#080808] px-6 py-12 text-neutral-300">
-      <div className="mx-auto max-w-3xl">
-        <div className="mb-8 flex items-center gap-4">
-          <span className="h-px w-14 bg-[#ff6b4a]" />
-          <span
-            role="heading"
-            aria-level={2}
-            className="font-mono text-xs uppercase tracking-[0.24em] text-[#ff6b4a]"
-          >
-            {"// " + data.workspaceName}
+    <div className="flex min-h-screen flex-col">
+      <header className="flex h-[60px] flex-shrink-0 items-center justify-between border-b border-[#232323] bg-[#0d0d0d] px-7">
+        <div className="flex items-center gap-2">
+          <span className="font-[family-name:var(--font-mono-label)] text-[11px] text-[#5a5a56]">
+            Workspace
           </span>
+          <ChevronRight className="h-3 w-3 text-[#5a5a56]" />
+          <span className="text-[13px] font-semibold text-[#e5e5e0]">Home</span>
         </div>
-
-        <p className="font-mono text-xs uppercase tracking-wider text-neutral-500">{dateLabel}</p>
-        <h1 className="mt-2 text-3xl font-light text-white">
-          {greeting}, {session.user.name}.
-        </h1>
-
-        <div className="mt-8 flex flex-col gap-4">
-          <MyTasksPreviewWidget items={data.myTasksPreview} workspaceId={workspaceId} />
-          <RecentListsWidget lists={data.recentLists} workspaceId={workspaceId} />
-          <AssignedByMeWidget items={data.assignedByMe} workspaceId={workspaceId} />
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            aria-label="Search"
+            className="flex h-[30px] w-[30px] items-center justify-center rounded-md border border-[#333333] bg-[#141414] text-[#8f8f8a] hover:bg-[#1a1a1a] hover:text-[#e5e5e0]"
+          >
+            <Search className="h-[15px] w-[15px]" />
+          </button>
+          <a
+            href="/updates"
+            aria-label="Updates"
+            className="flex h-[30px] w-[30px] items-center justify-center rounded-md border border-[#333333] bg-[#141414] text-[#8f8f8a] hover:bg-[#1a1a1a] hover:text-[#e5e5e0]"
+          >
+            <Bell className="h-[15px] w-[15px]" />
+          </a>
         </div>
-      </div>
-    </main>
+      </header>
+
+      <main className="flex-1 bg-[#080808] px-10 py-8">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-10">
+            <div className="mb-2 font-[family-name:var(--font-mono-label)] text-[11px] uppercase tracking-wider text-[#ff8a70]">
+              {dateLabel}
+            </div>
+            <h1 className="text-[32px] font-semibold tracking-tight text-[#e5e5e0]">
+              {greeting}, {session.user.name}
+            </h1>
+            <p className="mt-1 text-[13px] text-[#8f8f8a]">
+              {timeLabel} — {data.workspaceName}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-5">
+            <div className="col-span-2">
+              <MyTasksPreviewWidget items={data.myTasksPreview} workspaceId={workspaceId} viewerName={session.user.name} now={now} />
+            </div>
+            <RecentListsWidget lists={data.recentLists} workspaceId={workspaceId} />
+            <div className="col-span-3">
+              <AssignedByMeWidget items={data.assignedByMe} workspaceId={workspaceId} now={now} />
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }

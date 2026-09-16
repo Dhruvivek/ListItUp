@@ -2,64 +2,110 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Bell, ChevronDown, ChevronRight, ChevronsUpDown } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Bell, ChevronDown, ChevronRight, ChevronsUpDown, Home, ListChecks } from "lucide-react";
 
 import type { WorkspaceNavEntry } from "@/app/workspaces/[workspaceId]/layout-data";
 
 type WorkspaceSidebarProps = {
   currentWorkspaceId: string;
   currentWorkspaceName: string;
+  currentUserName: string;
   switchableWorkspaces: WorkspaceNavEntry[];
   personalSpace: WorkspaceNavEntry | null;
   unreadNotificationCount: number;
 };
 
+function initialsFromName(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  return words
+    .slice(0, 2)
+    .map((word) => word[0]!.toUpperCase())
+    .join("");
+}
+
+function NavLink({
+  href,
+  isActive,
+  icon,
+  label,
+  badge,
+}: {
+  href: string;
+  isActive: boolean;
+  icon: React.ReactNode;
+  label: string;
+  badge?: number;
+}) {
+  return (
+    <Link
+      href={href}
+      className={
+        isActive
+          ? "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13.5px] font-medium bg-[#ff6b4a24] text-[#ff8a70]"
+          : "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13.5px] font-medium text-[#8f8f8a] hover:bg-[#1a1a1a] hover:text-[#e5e5e0]"
+      }
+    >
+      <span className={isActive ? "text-[#ff8a70]" : "text-[#5a5a56]"}>{icon}</span>
+      <span className="flex-1">{label}</span>
+      {badge !== undefined && badge > 0 && (
+        <span
+          aria-label={`${badge} unread notifications`}
+          className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#ff6b4a] px-1 font-[family-name:var(--font-mono-label)] text-[11px] font-bold text-[#1a0800]"
+        >
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
+    </Link>
+  );
+}
+
 export function WorkspaceSidebar({
   currentWorkspaceId,
   currentWorkspaceName,
+  currentUserName,
   switchableWorkspaces,
   personalSpace,
   unreadNotificationCount,
 }: WorkspaceSidebarProps) {
+  const pathname = usePathname();
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const [isPersonalSpaceOpen, setIsPersonalSpaceOpen] = useState(false);
 
-  return (
-    <aside className="flex w-64 flex-shrink-0 flex-col gap-1 border-r border-neutral-800 bg-[#0d0d0d] p-3">
-      <Link
-        href="/updates"
-        className="mb-2 flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-neutral-300 hover:bg-[#141414] hover:text-white"
-      >
-        <Bell className="h-4 w-4 flex-shrink-0 text-neutral-500" strokeWidth={1.7} aria-hidden="true" />
-        <span className="flex-1">Updates</span>
-        {unreadNotificationCount > 0 && (
-          <span
-            aria-label={`${unreadNotificationCount} unread notifications`}
-            className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#ff6b4a] px-1 text-[11px] font-medium text-[#1a0a05]"
-          >
-            {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
-          </span>
-        )}
-      </Link>
+  const homeHref = `/workspaces/${currentWorkspaceId}`;
+  const isHomeActive = pathname === homeHref;
+  const isMyTasksActive = pathname.startsWith("/my-tasks");
+  const isUpdatesActive = pathname.startsWith("/updates");
 
-      <div className="relative">
+  return (
+    <aside className="flex w-64 flex-shrink-0 flex-col gap-1 border-r border-[#232323] bg-[#0d0d0d] p-3">
+      <div className="relative mb-2">
         <button
           type="button"
           onClick={() => setIsSwitcherOpen((open) => !open)}
           aria-expanded={isSwitcherOpen}
           aria-label="Switch Workspace"
-          className="flex w-full items-center gap-2.5 rounded-md border border-neutral-800 bg-[#141414] px-2.5 py-2 text-left hover:border-neutral-700"
+          className="flex w-full items-center gap-2.5 rounded-md border border-[#232323] bg-[#141414] px-2.5 py-2 text-left hover:border-[#333333]"
         >
-          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-white">
-            {currentWorkspaceName}
+          <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-[#ff6b4a] font-[family-name:var(--font-mono-label)] text-xs font-bold text-[#1a0800]">
+            {initialsFromName(currentWorkspaceName)}
           </span>
-          <ChevronsUpDown className="h-3.5 w-3.5 flex-shrink-0 text-neutral-500" />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[13px] font-semibold text-[#e5e5e0]">
+              {currentWorkspaceName}
+            </span>
+            <span className="block font-[family-name:var(--font-mono-label)] text-[9px] uppercase tracking-wider text-[#5a5a56]">
+              Workspace
+            </span>
+          </span>
+          <ChevronsUpDown className="h-3.5 w-3.5 flex-shrink-0 text-[#5a5a56]" />
         </button>
 
         {isSwitcherOpen && (
-          <ul className="absolute left-0 right-0 z-10 mt-1 rounded-md border border-neutral-800 bg-[#141414] py-1 shadow-lg">
+          <ul className="absolute left-0 right-0 z-10 mt-1 rounded-md border border-[#232323] bg-[#141414] py-1 shadow-lg">
             {switchableWorkspaces.length === 0 && (
-              <li className="px-3 py-2 text-xs text-neutral-500">No other Workspaces yet.</li>
+              <li className="px-3 py-2 text-xs text-[#5a5a56]">No other Workspaces yet.</li>
             )}
             {switchableWorkspaces.map((workspace) => (
               <li key={workspace.id}>
@@ -68,7 +114,7 @@ export function WorkspaceSidebar({
                   className={
                     workspace.id === currentWorkspaceId
                       ? "block px-3 py-2 text-sm text-[#ff8a70]"
-                      : "block px-3 py-2 text-sm text-neutral-300 hover:bg-[#1a1a1a] hover:text-white"
+                      : "block px-3 py-2 text-sm text-[#8f8f8a] hover:bg-[#1a1a1a] hover:text-[#e5e5e0]"
                   }
                 >
                   {workspace.name}
@@ -79,13 +125,30 @@ export function WorkspaceSidebar({
         )}
       </div>
 
+      <nav className="flex flex-col gap-0.5">
+        <NavLink href={homeHref} isActive={isHomeActive} icon={<Home className="h-4 w-4" />} label="Home" />
+        <NavLink
+          href={`/my-tasks?workspace=${currentWorkspaceId}`}
+          isActive={isMyTasksActive}
+          icon={<ListChecks className="h-4 w-4" />}
+          label="My Tasks"
+        />
+        <NavLink
+          href="/updates"
+          isActive={isUpdatesActive}
+          icon={<Bell className="h-4 w-4" />}
+          label="Updates"
+          badge={unreadNotificationCount}
+        />
+      </nav>
+
       <div className="mt-2">
         <button
           type="button"
           onClick={() => setIsPersonalSpaceOpen((open) => !open)}
           aria-expanded={isPersonalSpaceOpen}
           disabled={!personalSpace}
-          className="flex w-full items-center gap-1.5 rounded-md px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider text-neutral-500 hover:text-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex w-full items-center gap-1.5 rounded-md px-2.5 py-1.5 font-[family-name:var(--font-mono-label)] text-[10px] uppercase tracking-wider text-[#5a5a56] hover:text-[#8f8f8a] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isPersonalSpaceOpen ? (
             <ChevronDown className="h-3 w-3" />
@@ -99,12 +162,19 @@ export function WorkspaceSidebar({
           <div className="flex flex-col gap-0.5 pl-2">
             <Link
               href={`/workspaces/${personalSpace.id}`}
-              className="rounded-md px-2.5 py-1.5 text-sm text-neutral-300 hover:bg-[#1a1a1a] hover:text-white"
+              className="rounded-md px-2.5 py-1.5 text-sm text-[#8f8f8a] hover:bg-[#1a1a1a] hover:text-[#e5e5e0]"
             >
               {personalSpace.name}
             </Link>
           </div>
         )}
+      </div>
+
+      <div className="mt-auto flex items-center gap-2.5 border-t border-[#232323] px-2.5 pt-4">
+        <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 border-[#141414] bg-[#5b9dff] font-[family-name:var(--font-mono-label)] text-[10px] font-bold text-[#1a0800]">
+          {initialsFromName(currentUserName)}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-[#8f8f8a]">{currentUserName}</span>
       </div>
     </aside>
   );
