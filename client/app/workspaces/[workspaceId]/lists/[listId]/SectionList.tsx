@@ -1,11 +1,26 @@
 "use client";
 
 import { useState } from "react";
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Copy,
+  Link2,
+  MessageSquare,
+  Paperclip,
+  Pencil,
+  Trash2,
+} from "lucide-react";
+
+import { MemberAvatar } from "@/components/workspace/MemberAvatar";
+import { StatusBadge, type StatusBadgeTone } from "@/components/workspace/StatusBadge";
 
 import type { ItemSummary, SectionWithItems } from "./page-data";
 
-const STATE_COLOR: Record<ItemSummary["state"], string> = {
-  TO_DO: "#737373",
+const STATE_DOT_COLOR: Record<ItemSummary["state"], string> = {
+  TO_DO: "#5a5a56",
   IN_PROGRESS: "#5b9dff",
   BLOCKED: "#f5b642",
   COMPLETE: "#3ecf8e",
@@ -18,36 +33,111 @@ const PRIORITY_LABEL: Record<ItemSummary["priority"], string> = {
   HIGH: "High",
 };
 
-function ItemRow({ item, workspaceId, listId }: { item: ItemSummary; workspaceId: string; listId: string }) {
-  return (
-    <a
-      href={`/workspaces/${workspaceId}/lists/${listId}/items/${item.id}`}
-      className="flex items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-[#141414]"
-    >
-      <span
-        className="h-2 w-2 flex-shrink-0 rounded-full"
-        style={{ backgroundColor: STATE_COLOR[item.state] }}
-      />
-      <span className="flex-1 truncate text-neutral-200">
-        {item.hasParent && <span className="mr-1 text-neutral-600">↳</span>}
-        {item.title}
+function itemBadge(item: ItemSummary): { tone: StatusBadgeTone; label: string } | null {
+  if (item.state === "COMPLETE") return { tone: "green", label: "Complete" };
+  if (item.state === "BLOCKED") return { tone: "amber", label: "Blocked" };
+  if (item.dueDate) {
+    return {
+      tone: "blue",
+      label: item.dueDate.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+    };
+  }
+  return { tone: "muted", label: "Undated" };
+}
+
+function CompleteToggle({
+  checked,
+  itemId,
+  boundComplete,
+}: {
+  checked: boolean;
+  itemId: string;
+  boundComplete: (formData: FormData) => Promise<void>;
+}) {
+  if (checked) {
+    return (
+      <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-[5px] bg-[#ff6b4a]">
+        <Check className="h-[11px] w-[11px] text-[#1a0800]" />
       </span>
+    );
+  }
+
+  return (
+    <form action={boundComplete}>
+      <input type="hidden" name="itemId" value={itemId} />
+      <button
+        type="submit"
+        aria-label="Mark complete"
+        className="h-4 w-4 flex-shrink-0 rounded-[5px] border-[1.5px] border-[#333333] transition-colors hover:border-[#ff6b4a]"
+      />
+    </form>
+  );
+}
+
+function FacetIcon({ icon: Icon, count }: { icon: React.ComponentType<{ className?: string }>; count: number }) {
+  if (count === 0) return null;
+  return (
+    <span className="flex items-center gap-[3px] font-[family-name:var(--font-mono-label)] text-[11px] text-[#5a5a56]">
+      <Icon className="h-3 w-3" /> {count}
+    </span>
+  );
+}
+
+function ItemRow({
+  item,
+  workspaceId,
+  listId,
+  indented,
+  boundComplete,
+}: {
+  item: ItemSummary;
+  workspaceId: string;
+  listId: string;
+  indented: boolean;
+  boundComplete: (formData: FormData) => Promise<void>;
+}) {
+  const badge = itemBadge(item);
+
+  return (
+    <div
+      className={`flex items-center gap-2.5 rounded-[8px] py-2 pr-2.5 transition-colors hover:bg-[#1a1a1a] ${
+        indented ? "pl-[52px]" : "pl-2.5"
+      }`}
+    >
+      <CompleteToggle checked={item.state === "COMPLETE"} itemId={item.id} boundComplete={boundComplete} />
+      {!indented && <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ backgroundColor: STATE_DOT_COLOR[item.state] }} />}
+      <a
+        href={`/workspaces/${workspaceId}/lists/${listId}/items/${item.id}`}
+        className={`min-w-0 flex-1 truncate text-[13.5px] hover:underline ${
+          item.state === "COMPLETE" ? "text-[#5a5a56] line-through" : "text-[#e5e5e0]"
+        }`}
+      >
+        {item.hasParent && <span className="mr-1 text-[#5a5a56]">↳</span>}
+        {item.title}
+      </a>
       {item.priority !== "NORMAL" && (
-        <span className="font-mono text-[10px] uppercase tracking-wider text-neutral-500">
+        <span className="whitespace-nowrap font-[family-name:var(--font-mono-label)] text-[11px] uppercase tracking-[0.04em] text-[#8f8f8a]">
           {PRIORITY_LABEL[item.priority]}
         </span>
       )}
-      {item.dueDate && (
-        <span className="font-mono text-[10px] text-neutral-500">
-          {new Date(item.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+      {item.labels.map((label) => (
+        <span
+          key={label.id}
+          className="whitespace-nowrap rounded-full border border-[#333333] bg-[#1a1a1a] px-2 py-0.5 font-[family-name:var(--font-mono-label)] text-[10.5px] text-[#8f8f8a]"
+        >
+          {label.name}
         </span>
-      )}
-      {item.assignees.length > 0 && (
-        <span className="font-mono text-[10px] text-neutral-500">
-          {item.assignees.map((a) => a.name).join(", ")}
-        </span>
-      )}
-    </a>
+      ))}
+      <FacetIcon icon={Link2} count={item.dependencyCount} />
+      <FacetIcon icon={MessageSquare} count={item.noteCount} />
+      <FacetIcon icon={Paperclip} count={item.attachmentCount} />
+      <div className="flex flex-shrink-0 -space-x-1.5">
+        {item.assignees.map((assignee) => (
+          <MemberAvatar key={assignee.userId} name={assignee.name} />
+        ))}
+      </div>
+      {badge && <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>}
+    </div>
   );
 }
 
@@ -60,20 +150,21 @@ function ArchivedItemRow({
   item: ItemSummary;
   workspaceId: string;
   listId: string;
-  boundRestore: () => Promise<void>;
+  boundRestore: (formData: FormData) => Promise<void>;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-md px-3 py-2 text-sm">
+    <div className="flex items-center gap-3 rounded-[8px] px-2.5 py-2">
       <a
         href={`/workspaces/${workspaceId}/lists/${listId}/items/${item.id}`}
-        className="flex-1 truncate text-neutral-400 hover:text-neutral-200 hover:underline"
+        className="min-w-0 flex-1 truncate text-[13.5px] text-[#8f8f8a] hover:text-[#e5e5e0] hover:underline"
       >
         {item.title}
       </a>
       <form action={boundRestore}>
+        <input type="hidden" name="itemId" value={item.id} />
         <button
           type="submit"
-          className="rounded-md border border-neutral-700 px-3 py-1 text-xs text-neutral-300 hover:border-[#ff6b4a] hover:text-white"
+          className="rounded-[6px] border border-[#333333] px-3 py-1 text-xs text-[#8f8f8a] hover:border-[#ff6b4a] hover:text-[#e5e5e0]"
         >
           Restore
         </button>
@@ -83,22 +174,75 @@ function ArchivedItemRow({
 }
 
 function AddItemForm({
+  sectionId,
   boundAddItem,
 }: {
+  sectionId: string | null;
   boundAddItem: (formData: FormData) => Promise<void>;
 }) {
   return (
-    <form action={boundAddItem} className="flex items-center gap-2 px-3 py-2">
-      <span className="text-neutral-600">+</span>
+    <form action={boundAddItem} className="flex items-center gap-2 px-2.5 py-2">
+      {sectionId && <input type="hidden" name="sectionId" value={sectionId} />}
+      <span className="text-[#5a5a56]">+</span>
       <input
         type="text"
         name="title"
         placeholder="Add an Item"
         required
-        className="flex-1 bg-transparent text-sm text-neutral-200 placeholder:text-neutral-600 focus:outline-none"
+        className="flex-1 bg-transparent text-[13.5px] text-[#e5e5e0] placeholder:text-[#5a5a56] focus:outline-none"
       />
-      <button type="submit" className="text-xs text-neutral-500 hover:text-[#ff8a70]">
+      <button type="submit" className="text-xs text-[#5a5a56] hover:text-[#ff8a70]">
         Add
+      </button>
+    </form>
+  );
+}
+
+function SectionActionButton({
+  label,
+  onClick,
+  icon: Icon,
+}: {
+  label: string;
+  onClick: () => void;
+  icon: React.ComponentType<{ className?: string }>;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="flex h-[26px] w-[26px] items-center justify-center rounded-[6px] text-[#5a5a56] hover:bg-[#202020] hover:text-[#e5e5e0]"
+    >
+      <Icon className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
+function SectionActionForm({
+  label,
+  action,
+  hiddenFields,
+  icon: Icon,
+}: {
+  label: string;
+  action: (formData: FormData) => Promise<void>;
+  hiddenFields: Record<string, string>;
+  icon: React.ComponentType<{ className?: string }>;
+}) {
+  return (
+    <form action={action}>
+      {Object.entries(hiddenFields).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
+      <button
+        type="submit"
+        aria-label={label}
+        title={label}
+        className="flex h-[26px] w-[26px] items-center justify-center rounded-[6px] text-[#5a5a56] hover:bg-[#202020] hover:text-[#e5e5e0]"
+      >
+        <Icon className="h-3.5 w-3.5" />
       </button>
     </form>
   );
@@ -120,6 +264,7 @@ export function SectionList({
   boundSetGroupBy,
   boundAddItem,
   boundRestoreItem,
+  boundCompleteItem,
 }: {
   sections: SectionWithItems[];
   unsectionedItems: ItemSummary[];
@@ -129,13 +274,14 @@ export function SectionList({
   workspaceId: string;
   listId: string;
   boundAddSection: (formData: FormData) => Promise<void>;
-  boundRenameSection: (sectionId: string) => (formData: FormData) => Promise<void>;
-  boundDuplicateSection: (sectionId: string) => () => Promise<void>;
-  boundDeleteSection: (sectionId: string) => () => Promise<void>;
-  boundMoveSection: (sectionId: string, direction: "up" | "down") => () => Promise<void>;
+  boundRenameSection: (formData: FormData) => Promise<void>;
+  boundDuplicateSection: (formData: FormData) => Promise<void>;
+  boundDeleteSection: (formData: FormData) => Promise<void>;
+  boundMoveSection: (formData: FormData) => Promise<void>;
   boundSetGroupBy: (formData: FormData) => Promise<void>;
-  boundAddItem: (sectionId: string | null) => (formData: FormData) => Promise<void>;
-  boundRestoreItem: (itemId: string) => () => Promise<void>;
+  boundAddItem: (formData: FormData) => Promise<void>;
+  boundRestoreItem: (formData: FormData) => Promise<void>;
+  boundCompleteItem: (formData: FormData) => Promise<void>;
 }) {
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const [hideEmpty, setHideEmpty] = useState(false);
@@ -157,8 +303,13 @@ export function SectionList({
   const visibleSections = hideEmpty ? sections.filter((section) => section.items.length > 0) : sections;
   const showUnsectioned = unsectionedItems.length > 0 || (!hideEmpty && canManage);
 
+  const chipClass = (active: boolean) =>
+    active
+      ? "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-[#ff6b4a] bg-[#ff6b4a24] px-3 py-1 font-[family-name:var(--font-mono-label)] text-[10.5px] text-[#ff8a70]"
+      : "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-[#333333] bg-[#1a1a1a] px-3 py-1 font-[family-name:var(--font-mono-label)] text-[10.5px] text-[#8f8f8a] hover:text-[#e5e5e0]";
+
   return (
-    <div className="mt-6">
+    <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         {canManage && (
           <form action={boundAddSection} className="flex items-center gap-2">
@@ -167,11 +318,11 @@ export function SectionList({
               name="name"
               placeholder="New Section name"
               required
-              className="rounded-md border border-neutral-700 bg-[#141414] px-3 py-1.5 text-sm text-neutral-200 placeholder:text-neutral-600 focus:border-[#ff6b4a] focus:outline-none"
+              className="rounded-[6px] border border-[#333333] bg-[#141414] px-3 py-1.5 text-[13px] text-[#e5e5e0] placeholder:text-[#5a5a56] focus:border-[#ff6b4a] focus:outline-none"
             />
             <button
               type="submit"
-              className="rounded-md bg-[#ff6b4a] px-4 py-1.5 text-sm font-medium text-[#1a0800] hover:bg-[#ff8a70]"
+              className="flex items-center gap-1.5 rounded-[6px] bg-[#ff6b4a] px-3 py-[7px] text-[13px] font-semibold text-[#1a0800] hover:bg-[#ff8a70]"
             >
               Add Section
             </button>
@@ -180,107 +331,87 @@ export function SectionList({
 
         {canManage && (
           <form action={boundSetGroupBy} className="flex items-center gap-2">
-            <label className="font-mono text-[11px] uppercase tracking-wider text-neutral-500">
-              Add Rule — group by
-            </label>
             <select
               name="groupBy"
               defaultValue={groupBy}
-              className="rounded-md border border-neutral-700 bg-[#141414] px-3 py-1.5 text-sm text-neutral-200"
+              className="rounded-[6px] border border-[#333333] bg-[#141414] px-3 py-1.5 text-[13px] text-[#e5e5e0]"
             >
               <option value="SECTION">Section</option>
             </select>
             <button
               type="submit"
-              className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:border-[#ff6b4a] hover:text-white"
+              className={chipClass(false)}
             >
-              Apply
+              Add Rule: grouped by Section
             </button>
           </form>
         )}
 
-        <button
-          type="button"
-          onClick={() => setHideEmpty((current) => !current)}
-          className={
-            hideEmpty
-              ? "rounded-full border border-[#ff6b4a] px-3 py-1 text-xs text-[#ff8a70]"
-              : "rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-400 hover:text-neutral-200"
-          }
-        >
+        <button type="button" onClick={() => setHideEmpty((current) => !current)} className={chipClass(hideEmpty)}>
           Hide empty Sections
         </button>
 
-        <button
-          type="button"
-          onClick={() => setShowArchived((current) => !current)}
-          className={
-            showArchived
-              ? "rounded-full border border-[#ff6b4a] px-3 py-1 text-xs text-[#ff8a70]"
-              : "rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-400 hover:text-neutral-200"
-          }
-        >
+        <button type="button" onClick={() => setShowArchived((current) => !current)} className={chipClass(showArchived)}>
           Archived ({archivedItems.length})
         </button>
       </div>
 
       {showArchived ? (
-        <div className="rounded-lg border border-neutral-800 bg-[#0d0d0d]">
-          <div className="px-4 py-3 text-sm font-semibold text-white">Archived Items</div>
-          <div className="border-t border-neutral-800 px-1 py-1">
-            {archivedItems.length === 0 ? (
-              <div className="px-3 py-4 text-center text-xs text-neutral-600">No archived Items.</div>
-            ) : (
-              archivedItems.map((item) => (
-                <ArchivedItemRow
-                  key={item.id}
-                  item={item}
-                  workspaceId={workspaceId}
-                  listId={listId}
-                  boundRestore={boundRestoreItem(item.id)}
-                />
-              ))
-            )}
-          </div>
+        <div className="rounded-[12px] border border-[#232323] bg-[#141414] p-2">
+          <div className="px-2.5 py-2 text-[13px] font-semibold text-[#e5e5e0]">Archived Items</div>
+          {archivedItems.length === 0 ? (
+            <div className="px-3 py-4 text-center text-xs text-[#5a5a56]">No archived Items.</div>
+          ) : (
+            archivedItems.map((item) => (
+              <ArchivedItemRow
+                key={item.id}
+                item={item}
+                workspaceId={workspaceId}
+                listId={listId}
+                boundRestore={boundRestoreItem}
+              />
+            ))
+          )}
         </div>
       ) : visibleSections.length === 0 && !showUnsectioned ? (
-        <div className="rounded-lg border border-dashed border-neutral-800 px-4 py-16 text-center text-sm text-neutral-600">
+        <div className="rounded-[12px] border border-dashed border-[#232323] px-4 py-16 text-center text-sm text-[#5a5a56]">
           {sections.length === 0
             ? "No Sections yet."
             : "Every Section is empty — toggle “Hide empty Sections” off to see them."}
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {visibleSections.map((section) => {
+        <div className="rounded-[12px] border border-[#232323] bg-[#141414] p-2">
+          {visibleSections.map((section, index) => {
             const collapsed = collapsedIds.has(section.id);
             const isRenaming = renamingId === section.id;
 
             return (
-              <div key={section.id} className="rounded-lg border border-neutral-800 bg-[#0d0d0d]">
-                <div className="flex items-center gap-2 px-4 py-3">
+              <div key={section.id} className={index > 0 ? "mt-2" : undefined}>
+                <div className="flex items-center gap-2 px-2.5 py-2.5">
                   <button
                     type="button"
                     onClick={() => toggleCollapsed(section.id)}
                     aria-label={collapsed ? "Expand Section" : "Collapse Section"}
-                    className="text-neutral-500 hover:text-neutral-200"
+                    className="text-[#5a5a56] hover:text-[#e5e5e0]"
                   >
-                    {collapsed ? "▸" : "▾"}
+                    {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                   </button>
 
                   {isRenaming ? (
                     <form
                       action={async (formData) => {
-                        await boundRenameSection(section.id)(formData);
+                        await boundRenameSection(formData);
                         setRenamingId(null);
                       }}
                       className="flex flex-1 items-center gap-2"
                     >
+                      <input type="hidden" name="sectionId" value={section.id} />
                       <input
                         type="text"
                         name="name"
                         defaultValue={section.name}
                         autoFocus
-                        className="flex-1 rounded-md border border-neutral-700 bg-[#141414] px-2 py-1 text-sm text-neutral-200 focus:border-[#ff6b4a] focus:outline-none"
+                        className="flex-1 rounded-[6px] border border-[#333333] bg-[#1a1a1a] px-2 py-1 text-[13px] text-[#e5e5e0] focus:border-[#ff6b4a] focus:outline-none"
                       />
                       <button type="submit" className="text-xs text-[#ff8a70]">
                         Save
@@ -288,60 +419,67 @@ export function SectionList({
                       <button
                         type="button"
                         onClick={() => setRenamingId(null)}
-                        className="text-xs text-neutral-500 hover:text-neutral-300"
+                        className="text-xs text-[#5a5a56] hover:text-[#8f8f8a]"
                       >
                         Cancel
                       </button>
                     </form>
                   ) : (
-                    <span className="flex-1 text-sm font-semibold text-white">{section.name}</span>
+                    <span className="text-[13px] font-semibold text-[#e5e5e0]">{section.name}</span>
                   )}
 
-                  <span className="font-mono text-xs text-neutral-600">{section.items.length} items</span>
+                  {!isRenaming && <StatusBadge tone="muted">{section.items.length}</StatusBadge>}
+
+                  <div className="flex-1" />
 
                   {canManage && !isRenaming && (
-                    <div className="flex items-center gap-3 text-xs text-neutral-500">
-                      <button
-                        type="button"
-                        onClick={() => setRenamingId(section.id)}
-                        className="hover:text-neutral-200"
-                      >
-                        Rename
-                      </button>
-                      <form action={boundDuplicateSection(section.id)}>
-                        <button type="submit" className="hover:text-neutral-200">
-                          Duplicate
-                        </button>
-                      </form>
-                      <form action={boundMoveSection(section.id, "up")}>
-                        <button type="submit" className="hover:text-neutral-200">
-                          Move up
-                        </button>
-                      </form>
-                      <form action={boundMoveSection(section.id, "down")}>
-                        <button type="submit" className="hover:text-neutral-200">
-                          Move down
-                        </button>
-                      </form>
-                      <form action={boundDeleteSection(section.id)}>
-                        <button type="submit" className="hover:text-[#ff8a70]">
-                          Delete
-                        </button>
-                      </form>
+                    <div className="flex items-center gap-0.5">
+                      <SectionActionButton label="Rename Section" icon={Pencil} onClick={() => setRenamingId(section.id)} />
+                      <SectionActionForm
+                        label="Duplicate Section"
+                        icon={Copy}
+                        action={boundDuplicateSection}
+                        hiddenFields={{ sectionId: section.id }}
+                      />
+                      <SectionActionForm
+                        label="Move Section up"
+                        icon={ChevronUp}
+                        action={boundMoveSection}
+                        hiddenFields={{ sectionId: section.id, direction: "up" }}
+                      />
+                      <SectionActionForm
+                        label="Move Section down"
+                        icon={ChevronDown}
+                        action={boundMoveSection}
+                        hiddenFields={{ sectionId: section.id, direction: "down" }}
+                      />
+                      <SectionActionForm
+                        label="Delete Section"
+                        icon={Trash2}
+                        action={boundDeleteSection}
+                        hiddenFields={{ sectionId: section.id }}
+                      />
                     </div>
                   )}
                 </div>
 
                 {!collapsed && (
-                  <div className="border-t border-neutral-800 px-1 py-1">
+                  <div>
                     {section.items.length === 0 ? (
-                      <div className="px-3 py-4 text-center text-xs text-neutral-600">No Items yet.</div>
+                      <div className="px-3 py-4 text-center text-xs text-[#5a5a56]">No Items yet.</div>
                     ) : (
                       section.items.map((item) => (
-                        <ItemRow key={item.id} item={item} workspaceId={workspaceId} listId={listId} />
+                        <ItemRow
+                          key={item.id}
+                          item={item}
+                          workspaceId={workspaceId}
+                          listId={listId}
+                          indented={item.hasParent}
+                          boundComplete={boundCompleteItem}
+                        />
                       ))
                     )}
-                    {canManage && <AddItemForm boundAddItem={boundAddItem(section.id)} />}
+                    {canManage && <AddItemForm sectionId={section.id} boundAddItem={boundAddItem} />}
                   </div>
                 )}
               </div>
@@ -349,14 +487,22 @@ export function SectionList({
           })}
 
           {showUnsectioned && (
-            <div className="rounded-lg border border-neutral-800 bg-[#0d0d0d]">
-              <div className="px-4 py-3 text-sm font-semibold text-white">No Section</div>
-              <div className="border-t border-neutral-800 px-1 py-1">
-                {unsectionedItems.map((item) => (
-                  <ItemRow key={item.id} item={item} workspaceId={workspaceId} listId={listId} />
-                ))}
-                {canManage && <AddItemForm boundAddItem={boundAddItem(null)} />}
+            <div className={visibleSections.length > 0 ? "mt-2" : undefined}>
+              <div className="flex items-center gap-2 px-2.5 py-2.5">
+                <span className="text-[13px] font-semibold text-[#e5e5e0]">No Section</span>
+                <StatusBadge tone="muted">{unsectionedItems.length}</StatusBadge>
               </div>
+              {unsectionedItems.map((item) => (
+                <ItemRow
+                  key={item.id}
+                  item={item}
+                  workspaceId={workspaceId}
+                  listId={listId}
+                  indented={item.hasParent}
+                  boundComplete={boundCompleteItem}
+                />
+              ))}
+              {canManage && <AddItemForm sectionId={null} boundAddItem={boundAddItem} />}
             </div>
           )}
         </div>

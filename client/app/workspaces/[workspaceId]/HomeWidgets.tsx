@@ -1,6 +1,7 @@
 import { ArrowRight, Check, LayoutList } from "lucide-react";
 
 import { MemberAvatar } from "@/components/workspace/MemberAvatar";
+import { StatusBadge, type StatusBadgeTone } from "@/components/workspace/StatusBadge";
 import type { AssignedByMeItem } from "@/lib/item/item-assigned-by-me";
 import type { MyTaskItem } from "@/lib/item/item-my-tasks";
 import type { RecentListSummary } from "./page-data";
@@ -13,26 +14,6 @@ const STATE_COLOR: Record<MyTaskItem["state"], string> = {
   ARCHIVED: "#525252",
 };
 
-type BadgeTone = "red" | "amber" | "blue" | "green" | "muted";
-
-const BADGE_TONE_CLASSES: Record<BadgeTone, string> = {
-  red: "bg-[#f2545b24] text-[#f2545b]",
-  amber: "bg-[#f5b64224] text-[#f5b642]",
-  blue: "bg-[#5b9dff24] text-[#5b9dff]",
-  green: "bg-[#3ecf8e24] text-[#3ecf8e]",
-  muted: "bg-[#202020] text-[#8f8f8a]",
-};
-
-function Badge({ tone, children }: { tone: BadgeTone; children: React.ReactNode }) {
-  return (
-    <span
-      className={`whitespace-nowrap rounded-[5px] px-[7px] py-[2px] font-[family-name:var(--font-mono-label)] text-[10px] font-semibold tracking-[0.05em] ${BADGE_TONE_CLASSES[tone]}`}
-    >
-      {children}
-    </span>
-  );
-}
-
 function formatDueDate(dueDate: Date): string {
   return dueDate.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
@@ -40,7 +21,7 @@ function formatDueDate(dueDate: Date): string {
 function dueDateBadge(
   item: { state: MyTaskItem["state"]; dueDate: Date | null },
   now: Date
-): { tone: BadgeTone; label: string } {
+): { tone: StatusBadgeTone; label: string } {
   if (item.state === "COMPLETE") return { tone: "green", label: "Complete" };
   if (item.state === "BLOCKED") return { tone: "amber", label: "Blocked" };
   if (item.dueDate && item.dueDate.getTime() < now.getTime()) {
@@ -128,7 +109,7 @@ export function MyTasksPreviewWidget({
                 >
                   {item.title}
                 </a>
-                <Badge tone={badge.tone}>{badge.label}</Badge>
+                <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
                 <MemberAvatar name={viewerName} />
               </li>
             );
@@ -222,7 +203,7 @@ export function AssignedByMeWidget({
                     </span>
                   )}
                 </div>
-                <Badge tone={badge.tone}>{badge.label}</Badge>
+                <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
               </li>
             );
           })}

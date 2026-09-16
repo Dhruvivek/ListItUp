@@ -43,6 +43,13 @@ export type ItemSummary = {
   dueDate: Date | null;
   hasParent: boolean;
   assignees: { userId: string; name: string }[];
+  labels: { id: string; name: string }[];
+  // Dependency facet (design-mocks/list-view's "link-2" icon) counts both
+  // directions — an Item that blocks others and one that's blocked by
+  // others are equally "linked" for this at-a-glance count.
+  dependencyCount: number;
+  noteCount: number;
+  attachmentCount: number;
 };
 
 export type SectionWithItems = {
@@ -151,6 +158,8 @@ export async function loadListPageData(
       include: {
         assignees: { include: { user: { select: { id: true, name: true } } } },
         attachments: { include: { uploader: { select: { name: true } } } },
+        labels: { include: { label: { select: { id: true, name: true } } } },
+        _count: { select: { blocking: true, blockedBy: true, notes: true } },
       },
       orderBy: { createdAt: "asc" },
     }),
@@ -182,6 +191,10 @@ export async function loadListPageData(
       userId: assignee.userId,
       name: assignee.user.name,
     })),
+    labels: item.labels.map((itemLabel) => ({ id: itemLabel.label.id, name: itemLabel.label.name })),
+    dependencyCount: item._count.blocking + item._count.blockedBy,
+    noteCount: item._count.notes,
+    attachmentCount: item.attachments.length,
   });
 
   const itemsBySectionId = new Map<string, ItemSummary[]>();

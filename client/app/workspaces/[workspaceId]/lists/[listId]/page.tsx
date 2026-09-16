@@ -21,6 +21,7 @@ import {
   addItemAction,
   addListMemberAction,
   addSectionAction,
+  completeItemAction,
   duplicateSectionAction,
   deleteSectionAction,
   grantGuestAccessAction,
@@ -276,16 +277,25 @@ export default async function ListPage({ params, searchParams }: Props) {
   const boundGrantGuest = grantGuestAccessAction.bind(null, workspaceId, listId);
   const boundRevokeGuest = (userId: string) => revokeGuestAccessAction.bind(null, workspaceId, listId, userId);
   const boundAddSection = addSectionAction.bind(null, workspaceId, listId);
-  const boundRenameSection = (sectionId: string) => renameSectionAction.bind(null, workspaceId, listId, sectionId);
-  const boundDuplicateSection = (sectionId: string) => duplicateSectionAction.bind(null, workspaceId, listId, sectionId);
-  const boundDeleteSection = (sectionId: string) => deleteSectionAction.bind(null, workspaceId, listId, sectionId);
-  const boundMoveSection = (sectionId: string, direction: "up" | "down") =>
-    moveSectionAction.bind(null, workspaceId, listId, sectionId, direction);
+  // Bound only through workspaceId/listId (never further, e.g. per-Section)
+  // — SectionList and BoardView are Client Components, and a Server
+  // Component can only pass a Client Component an already-bound Server
+  // Action reference, never a hand-written closure that wraps one (React
+  // can't serialize an arbitrary closure across that boundary). The
+  // remaining argument (sectionId, itemId, direction, ...) gets bound
+  // client-side instead, inside those components — binding an
+  // already-received Server Action reference further is fine since no
+  // additional serialization boundary is crossed at that point.
+  const boundRenameSection = renameSectionAction.bind(null, workspaceId, listId);
+  const boundDuplicateSection = duplicateSectionAction.bind(null, workspaceId, listId);
+  const boundDeleteSection = deleteSectionAction.bind(null, workspaceId, listId);
+  const boundMoveSection = moveSectionAction.bind(null, workspaceId, listId);
   const boundSetGroupBy = setListGroupByAction.bind(null, workspaceId, listId);
-  const boundAddItem = (sectionId: string | null) => addItemAction.bind(null, workspaceId, listId, sectionId);
+  const boundAddItem = addItemAction.bind(null, workspaceId, listId);
   const boundSetBoardGroupBy = setBoardGroupByAction.bind(null, workspaceId, listId);
   const boundMoveItem = moveItemToColumnAction.bind(null, workspaceId, listId, data.boardGroupBy);
-  const boundRestoreItem = (itemId: string) => restoreItemAction.bind(null, workspaceId, listId, itemId);
+  const boundRestoreItem = restoreItemAction.bind(null, workspaceId, listId);
+  const boundCompleteItem = completeItemAction.bind(null, workspaceId, listId);
   const boundTogglePeerComparison = togglePeerComparisonAction.bind(null, workspaceId, listId);
 
   return (
@@ -369,6 +379,7 @@ export default async function ListPage({ params, searchParams }: Props) {
             boundSetGroupBy={boundSetGroupBy}
             boundAddItem={boundAddItem}
             boundRestoreItem={boundRestoreItem}
+            boundCompleteItem={boundCompleteItem}
           />
         ) : activeTab === "board" ? (
           <BoardView

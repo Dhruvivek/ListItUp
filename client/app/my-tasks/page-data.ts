@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import {
+  buildMyTasksSmartSections,
   groupMyTasksItems,
   loadMyTasksItems,
   type MyTaskItem,
@@ -96,7 +97,10 @@ export async function loadMyTasksPageData(
   const calendarMonthStart = parseCalendarMonth(rawCalendarMonth, now);
 
   return {
-    groups: groupMyTasksItems(items, groupBy, now),
+    // groupBy "NONE" (the default) renders the mock's smart sections
+    // (Overdue/Blocked/Today/Upcoming/No due date) rather than one flat
+    // "ALL" bucket — an explicit Group-by field still wins when chosen.
+    groups: groupBy === "NONE" ? buildMyTasksSmartSections(items, now) : groupMyTasksItems(items, groupBy, now),
     filterWorkspaces: memberships.map((membership) => ({
       id: membership.workspaceId,
       name: membership.workspace.name,

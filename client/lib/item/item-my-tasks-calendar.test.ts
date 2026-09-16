@@ -20,6 +20,7 @@ function item(overrides: Partial<MyTaskItem> & Pick<MyTaskItem, "id">): MyTaskIt
     sourceWorkspaceId: "ws-1",
     sourceWorkspaceName: "Marketing",
     sourceWorkspaceKind: "SHARED",
+    blockerReason: null,
     attachments: [],
     ...overrides,
   };

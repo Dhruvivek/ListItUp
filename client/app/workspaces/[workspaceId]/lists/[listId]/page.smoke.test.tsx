@@ -594,6 +594,47 @@ async function run() {
       );
       assert.equal(onData!.dashboard.peerComparisonEnabled, true);
     }
+
+    // An Item's Labels and dependency/note/attachment facet counts
+    // (design-mocks/list-view) surface on its ItemSummary.
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const memberId = await createUser();
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: memberId, role: "MEMBER" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: memberId, role: "MEMBER" },
+      });
+
+      const label = await prisma.label.create({ data: { id: randomUUID(), workspaceId, name: "Structural" } });
+      const blocker = await prisma.item.create({
+        data: { id: randomUUID(), listId, title: "Blocker item", creatorId: memberId },
+      });
+      const item = await prisma.item.create({
+        data: {
+          id: randomUUID(),
+          listId,
+          title: "Item with facets",
+          creatorId: memberId,
+          labels: { create: [{ id: randomUUID(), labelId: label.id }] },
+          notes: { create: [{ id: randomUUID(), authorId: memberId, body: "A comment" }] },
+        },
+      });
+      await prisma.itemDependency.create({
+        data: { id: randomUUID(), blockerId: blocker.id, blockedId: item.id },
+      });
+
+      const data = await loadListPageData(prisma, { userId: memberId, workspaceId, listId });
+
+      assert.ok(data);
+      const summary = data!.unsectionedItems.find((entry) => entry.id === item.id);
+      assert.ok(summary);
+      assert.deepEqual(summary!.labels, [{ id: label.id, name: "Structural" }]);
+      assert.equal(summary!.dependencyCount, 1, "blockedBy counts toward the dependency facet too");
+      assert.equal(summary!.noteCount, 1);
+      assert.equal(summary!.attachmentCount, 0);
+    }
   } finally {
     const listIds = (
       await prisma.list.findMany({ where: { workspaceId: { in: createdWorkspaceIds } } })

@@ -90,7 +90,7 @@ export function BoardView({
   archivedItems: ItemSummary[];
   boundSetGroupBy: (formData: FormData) => Promise<void>;
   boundMoveItem: (itemId: string, columnKey: string, blockerReason?: string) => Promise<void>;
-  boundRestoreItem: (itemId: string) => () => Promise<void>;
+  boundRestoreItem: (formData: FormData) => Promise<void>;
 }) {
   const [showArchived, setShowArchived] = useState(false);
 
@@ -151,7 +151,8 @@ export function BoardView({
                   >
                     {item.title}
                   </a>
-                  <form action={boundRestoreItem(item.id)}>
+                  <form action={boundRestoreItem}>
+                    <input type="hidden" name="itemId" value={item.id} />
                     <button
                       type="submit"
                       className="rounded-md border border-neutral-700 px-3 py-1 text-xs text-neutral-300 hover:border-[#ff6b4a] hover:text-white"

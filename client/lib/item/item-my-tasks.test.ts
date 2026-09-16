@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 
 import {
   applyMyTasksSort,
+  buildMyTasksSmartSections,
   groupMyTasksItems,
   isItemOverdue,
   isValidMyTasksGroupBy,
   isValidMyTasksSortBy,
   isVisibleByDefault,
   myTaskItemHref,
+  myTaskRowBadge,
   sortMyTasks,
 } from "./item-my-tasks";
 
@@ -146,5 +148,73 @@ assert.equal(
   myTaskItemHref({ sourceWorkspaceId: "ws-1", listId: "list-1" }, "item-1"),
   "/workspaces/ws-1/lists/list-1/items/item-1"
 );
+
+// buildMyTasksSmartSections (design-mocks/my-tasks default grouping):
+// Blocked is its own section regardless of due date — even one that would
+// otherwise be Overdue — and everything else buckets by due date.
+{
+  const overdue = { id: "overdue", state: "TO_DO" as const, priority: "HIGH" as const, dueDate: new Date("2026-09-01") };
+  const blockedOverdue = {
+    id: "blocked-overdue",
+    state: "BLOCKED" as const,
+    priority: "NORMAL" as const,
+    dueDate: new Date("2026-09-01"),
+  };
+  const today = {
+    id: "today",
+    state: "TO_DO" as const,
+    priority: "NORMAL" as const,
+    dueDate: new Date("2026-09-15T20:00:00.000Z"),
+  };
+  const upcoming = { id: "upcoming", state: "TO_DO" as const, priority: "LOW" as const, dueDate: new Date("2026-09-20") };
+  const undated = { id: "undated", state: "TO_DO" as const, priority: "LOW" as const, dueDate: null };
+
+  const sections = buildMyTasksSmartSections([overdue, blockedOverdue, today, upcoming, undated], now);
+
+  assert.deepEqual(
+    sections.map((section) => [section.label, section.items.map((item) => item.id)]),
+    [
+      ["Overdue", ["overdue"]],
+      ["Blocked", ["blocked-overdue"]],
+      ["Today", ["today"]],
+      ["Upcoming", ["upcoming"]],
+      ["No due date", ["undated"]],
+    ]
+  );
+}
+
+// myTaskRowBadge: Blocked beats any date (showing the blocker reason, or a
+// fallback if none is set), then Complete, then the date itself — "Today"
+// reads better than a formatted date for something due today.
+{
+  assert.deepEqual(
+    myTaskRowBadge({ state: "BLOCKED", dueDate: new Date("2026-09-01"), blockerReason: "Awaiting vendor" }, now),
+    { tone: "amber", label: "Awaiting vendor" }
+  );
+  assert.deepEqual(
+    myTaskRowBadge({ state: "BLOCKED", dueDate: null, blockerReason: null }, now),
+    { tone: "amber", label: "Blocked" }
+  );
+  assert.deepEqual(
+    myTaskRowBadge({ state: "COMPLETE", dueDate: new Date("2026-09-01"), blockerReason: null }, now),
+    { tone: "green", label: "Complete" }
+  );
+  assert.deepEqual(
+    myTaskRowBadge({ state: "TO_DO", dueDate: null, blockerReason: null }, now),
+    { tone: "muted", label: "Undated" }
+  );
+  assert.deepEqual(
+    myTaskRowBadge({ state: "TO_DO", dueDate: new Date("2026-09-01"), blockerReason: null }, now),
+    { tone: "red", label: "Sep 1" }
+  );
+  assert.deepEqual(
+    myTaskRowBadge({ state: "TO_DO", dueDate: new Date("2026-09-15T20:00:00.000Z"), blockerReason: null }, now),
+    { tone: "blue", label: "Today" }
+  );
+  assert.deepEqual(
+    myTaskRowBadge({ state: "TO_DO", dueDate: new Date("2026-09-20"), blockerReason: null }, now),
+    { tone: "blue", label: "Sep 20" }
+  );
+}
 
 console.log("item my-tasks test passed");

@@ -64,7 +64,8 @@ async function run() {
 
       const data = await loadMyTasksPageData(prisma, { userId });
 
-      assert.equal(data.groups.length, 1, "ungrouped by default: a single unlabeled group");
+      assert.equal(data.groups.length, 1, "the mock's smart sections (design-mocks/my-tasks) by default");
+      assert.equal(data.groups[0].label, "No due date", "an undated Item lands in the No due date section");
       assert.equal(data.groups[0].items.length, 1);
       assert.equal(data.groups[0].items[0].title, "Campaign brief");
       assert.equal(data.selectedWorkspaceId, null);

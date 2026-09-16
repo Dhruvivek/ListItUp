@@ -20,6 +20,11 @@ export type MyTaskItem = {
   sourceWorkspaceId: string;
   sourceWorkspaceName: string;
   sourceWorkspaceKind: WorkspaceKind;
+  // Shown in place of a due-date badge when state is BLOCKED
+  // (design-mocks/my-tasks) — required at the application layer whenever
+  // state is BLOCKED (lib/item/'s state-transition rules), so it's always
+  // present for a Blocked Item.
+  blockerReason: string | null;
   // Board's grouping is view-only for WORKSPACE (#43) and Files aggregates
   // across every assigned Item (#22-equivalent for My Tasks) — both views
   // read straight off this same fetch rather than issuing their own query.
@@ -204,6 +209,78 @@ export function groupMyTasksItems<
   }));
 }
 
+export type MyTasksSmartSectionKey = "OVERDUE" | "BLOCKED" | "TODAY" | "UPCOMING" | "NO_DUE_DATE";
+
+const SMART_SECTION_ORDER: readonly MyTasksSmartSectionKey[] = [
+  "OVERDUE",
+  "BLOCKED",
+  "TODAY",
+  "UPCOMING",
+  "NO_DUE_DATE",
+];
+const SMART_SECTION_LABEL: Record<MyTasksSmartSectionKey, string> = {
+  OVERDUE: "Overdue",
+  BLOCKED: "Blocked",
+  TODAY: "Today",
+  UPCOMING: "Upcoming",
+  NO_DUE_DATE: "No due date",
+};
+
+function smartSectionKey(item: { state: ItemState; dueDate: Date | null }, now: Date): MyTasksSmartSectionKey {
+  if (item.state === "BLOCKED") return "BLOCKED";
+  if (item.dueDate === null) return "NO_DUE_DATE";
+  if (isItemOverdue(item, now)) return "OVERDUE";
+  if (isSameCalendarDay(item.dueDate, now)) return "TODAY";
+  return "UPCOMING";
+}
+
+// The mock's default grouping (design-mocks/my-tasks): a State-aware
+// refinement of the #42 SMART sort into labeled sections rather than a new
+// selectable Group-by field — Blocked is its own section regardless of due
+// date (it needs different handling from the User than a date alone
+// implies), everything else buckets by due date exactly like the explicit
+// Due Date group-by. Presentational only: it never changes which Items are
+// included or their SMART order within a section, and callers only use it
+// in place of groupMyTasksItems() while groupBy is "NONE" (no explicit
+// Group-by field chosen).
+export function buildMyTasksSmartSections<
+  T extends { state: ItemState; priority: ItemPriority; dueDate: Date | null },
+>(items: T[], now: Date): MyTasksGroup<T>[] {
+  const bySection = new Map<MyTasksSmartSectionKey, T[]>();
+  for (const item of items) {
+    const key = smartSectionKey(item, now);
+    bySection.set(key, [...(bySection.get(key) ?? []), item]);
+  }
+  return SMART_SECTION_ORDER.filter((key) => bySection.has(key)).map((key) => ({
+    key,
+    label: SMART_SECTION_LABEL[key],
+    items: bySection.get(key) ?? [],
+  }));
+}
+
+export type MyTaskBadgeTone = "red" | "amber" | "green" | "blue" | "muted";
+export type MyTaskBadge = { tone: MyTaskBadgeTone; label: string };
+
+function formatShortDate(date: Date): string {
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+// The due/status badge shown per row (design-mocks/my-tasks): Blocked
+// state takes priority over any date (mirrors smartSectionKey's
+// precedence), then Complete, then the date itself — "Today" reads better
+// than a formatted date a User already knows is today.
+export function myTaskRowBadge(
+  item: { state: ItemState; dueDate: Date | null; blockerReason: string | null },
+  now: Date
+): MyTaskBadge {
+  if (item.state === "BLOCKED") return { tone: "amber", label: item.blockerReason ?? "Blocked" };
+  if (item.state === "COMPLETE") return { tone: "green", label: "Complete" };
+  if (item.dueDate === null) return { tone: "muted", label: "Undated" };
+  if (isItemOverdue(item, now)) return { tone: "red", label: formatShortDate(item.dueDate) };
+  if (isSameCalendarDay(item.dueDate, now)) return { tone: "blue", label: "Today" };
+  return { tone: "blue", label: formatShortDate(item.dueDate) };
+}
+
 function toMyTaskItem(
   item: Item & {
     list: { id: string; name: string; workspaceId: string; workspace: { id: string; name: string; kind: WorkspaceKind } };
@@ -222,6 +299,7 @@ function toMyTaskItem(
     sourceWorkspaceId: item.list.workspace.id,
     sourceWorkspaceName: item.list.workspace.name,
     sourceWorkspaceKind: item.list.workspace.kind,
+    blockerReason: item.blockerReason,
     attachments: item.attachments.map((attachment) => ({
       id: attachment.id,
       fileName: attachment.fileName,
