@@ -106,15 +106,19 @@ enum WorkspaceRole {
 }
 
 model Workspace {
-  id          String                @id
-  name        String
-  kind        WorkspaceKind         @default(SHARED)
-  createdAt   DateTime              @default(now())
-  updatedAt   DateTime              @updatedAt
-  lists       List[]
-  members     WorkspaceMember[]
-  invitations WorkspaceInvitation[]
-  labels      Label[]
+  id                     String                @id
+  name                   String
+  kind                   WorkspaceKind         @default(SHARED)
+  // List Dashboard's Peer Comparison setting (#58) — off by default,
+  // workspace-level, changeable only by a Workspace Owner or Admin
+  // (lib/workspace/workspace-peer-comparison.ts).
+  peerComparisonEnabled  Boolean               @default(false)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  lists                  List[]
+  members                WorkspaceMember[]
+  invitations            WorkspaceInvitation[]
+  labels                 Label[]
 
   @@map("workspace")
 }

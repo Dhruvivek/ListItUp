@@ -1,5 +1,6 @@
 import { ArrowRight, Check, LayoutList } from "lucide-react";
 
+import { MemberAvatar } from "@/components/workspace/MemberAvatar";
 import type { AssignedByMeItem } from "@/lib/item/item-assigned-by-me";
 import type { MyTaskItem } from "@/lib/item/item-my-tasks";
 import type { RecentListSummary } from "./page-data";
@@ -11,35 +12,6 @@ const STATE_COLOR: Record<MyTaskItem["state"], string> = {
   COMPLETE: "#3ecf8e",
   ARCHIVED: "#525252",
 };
-
-const AVATAR_COLORS = ["#ff8a70", "#5b9dff", "#3ecf8e", "#f5b642", "#f2545b"];
-
-function initialsFromName(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "?";
-  return words
-    .slice(0, 2)
-    .map((word) => word[0]!.toUpperCase())
-    .join("");
-}
-
-function avatarColorForName(name: string): string {
-  let hash = 0;
-  for (const character of name) hash = (hash * 31 + character.charCodeAt(0)) % AVATAR_COLORS.length;
-  return AVATAR_COLORS[hash]!;
-}
-
-function Avatar({ name }: { name: string }) {
-  return (
-    <span
-      className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 border-[#141414] font-[family-name:var(--font-mono-label)] text-[10px] font-bold text-[#1a0800]"
-      style={{ backgroundColor: avatarColorForName(name) }}
-      title={name}
-    >
-      {initialsFromName(name)}
-    </span>
-  );
-}
 
 type BadgeTone = "red" | "amber" | "blue" | "green" | "muted";
 
@@ -157,7 +129,7 @@ export function MyTasksPreviewWidget({
                   {item.title}
                 </a>
                 <Badge tone={badge.tone}>{badge.label}</Badge>
-                <Avatar name={viewerName} />
+                <MemberAvatar name={viewerName} />
               </li>
             );
           })}
@@ -242,7 +214,7 @@ export function AssignedByMeWidget({
                 </a>
                 <div className="flex flex-shrink-0 -space-x-1.5">
                   {item.assigneeNames.slice(0, 2).map((name) => (
-                    <Avatar key={name} name={name} />
+                    <MemberAvatar key={name} name={name} />
                   ))}
                   {item.assigneeCount > 2 && (
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#202020] font-[family-name:var(--font-mono-label)] text-[10px] font-bold text-[#8f8f8a]">

@@ -32,7 +32,7 @@ export default async function WorkspaceLayout({
     notFound();
   }
 
-  const navData = await loadWorkspaceNavData(prisma, session.user.id);
+  const navData = await loadWorkspaceNavData(prisma, session.user.id, workspaceId);
 
   return (
     <div
@@ -45,6 +45,7 @@ export default async function WorkspaceLayout({
         switchableWorkspaces={navData.switchableWorkspaces}
         personalSpace={navData.personalSpace}
         unreadNotificationCount={navData.unreadNotificationCount}
+        lists={navData.lists}
       />
       <div className="min-w-0 flex-1">{children}</div>
     </div>

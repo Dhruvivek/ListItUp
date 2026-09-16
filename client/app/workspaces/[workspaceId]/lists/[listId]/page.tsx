@@ -1,3 +1,17 @@
+import {
+  BarChart3,
+  Calendar,
+  Columns3,
+  Download,
+  GanttChart,
+  LayoutDashboard,
+  LayoutList,
+  List,
+  MessageSquare,
+  Paperclip,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
@@ -18,6 +32,7 @@ import {
   revokeGuestAccessAction,
   setBoardGroupByAction,
   setListGroupByAction,
+  togglePeerComparisonAction,
   updateListDescriptionAction,
 } from "./actions";
 import { BoardView } from "./BoardView";
@@ -47,11 +62,22 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "list", label: "List" },
   { key: "board", label: "Board" },
   { key: "calendar", label: "Calendar" },
-  { key: "files", label: "Files" },
   { key: "timeline", label: "Timeline" },
+  { key: "files", label: "Files" },
   { key: "dashboard", label: "Dashboard" },
   { key: "messages", label: "Messages" },
 ];
+
+const TAB_ICON: Record<TabKey, LucideIcon> = {
+  overview: LayoutDashboard,
+  list: List,
+  board: Columns3,
+  calendar: Calendar,
+  timeline: GanttChart,
+  files: Paperclip,
+  dashboard: BarChart3,
+  messages: MessageSquare,
+};
 
 const TAB_KEYS: readonly string[] = TABS.map((tab) => tab.key);
 
@@ -60,10 +86,8 @@ function isTabKey(value: string): value is TabKey {
 }
 
 // Calendar ships in its own ticket (#32). Messages is this spec's
-// deliberately reserved placeholder (v2 Chat/VC work). Dashboard's
-// count/breakdown widgets shipped in #51 — its remaining widgets
-// (heatmap #54, progress #55, contribution map #56, radar #57, peer
-// comparison #58) are still to come, added onto DashboardTab as they ship.
+// deliberately reserved placeholder (v2 Chat/VC work). Dashboard shipped
+// in full across #51 and #54-#58.
 const TAB_NOTES: Record<
   Exclude<TabKey, "overview" | "list" | "board" | "timeline" | "files" | "dashboard">,
   string
@@ -262,39 +286,64 @@ export default async function ListPage({ params, searchParams }: Props) {
   const boundSetBoardGroupBy = setBoardGroupByAction.bind(null, workspaceId, listId);
   const boundMoveItem = moveItemToColumnAction.bind(null, workspaceId, listId, data.boardGroupBy);
   const boundRestoreItem = (itemId: string) => restoreItemAction.bind(null, workspaceId, listId, itemId);
+  const boundTogglePeerComparison = togglePeerComparisonAction.bind(null, workspaceId, listId);
 
   return (
-    <main className="min-h-screen bg-[#080808] px-6 py-12 text-neutral-300">
-      <div className="mx-auto max-w-4xl">
-        <div className="mb-8 flex items-center gap-4">
-          <span className="h-px w-14 bg-[#ff6b4a]" />
-          <a
-            href={`/workspaces/${workspaceId}/lists`}
-            className="font-mono text-xs uppercase tracking-[0.24em] text-[#ff6b4a] hover:text-[#ff8a70]"
-          >
-            {"// Back to Lists"}
-          </a>
+    <div className="flex min-h-screen flex-col">
+      <header className="flex h-[60px] flex-shrink-0 items-center justify-between border-b border-[#232323] bg-[#0d0d0d] px-7">
+        <div className="flex min-w-0 items-center gap-2">
+          <LayoutList className="h-4 w-4 flex-shrink-0 text-[#ff8a70]" />
+          <span className="truncate text-[13px] font-semibold text-[#e5e5e0]">{data.name}</span>
         </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled
+            title="Export CSV ships with the Reports & Analytics spec (ADR 0012)."
+            className="flex items-center gap-1.5 rounded-[6px] border border-[#333333] px-3 py-[7px] text-[13px] font-semibold text-[#8f8f8a] opacity-60"
+          >
+            <Download className="h-3.5 w-3.5" /> Export CSV
+          </button>
+          <button
+            type="button"
+            aria-label="List settings"
+            className="flex h-[30px] w-[30px] items-center justify-center rounded-[6px] border border-[#333333] bg-[#141414] text-[#8f8f8a] hover:bg-[#1a1a1a] hover:text-[#e5e5e0]"
+          >
+            <Settings className="h-[15px] w-[15px]" />
+          </button>
+        </div>
+      </header>
 
-        <h1 className="text-3xl font-light text-white">{data.name}</h1>
+      <main className="flex-1 bg-[#080808] px-10 pb-16 pt-8 text-neutral-300">
+        <div className="mx-auto max-w-6xl">
+          <nav className="mb-6 flex flex-wrap items-center gap-6 border-b border-[#232323]">
+            {TABS.map((tab) => {
+              const Icon = TAB_ICON[tab.key];
+              const isDisabledTab = tab.key === "messages";
+              return (
+                <a
+                  key={tab.key}
+                  href={tabHref(workspaceId, listId, tab.key)}
+                  className={
+                    isDisabledTab
+                      ? "flex cursor-default items-center gap-1.5 border-b-2 border-transparent py-3 text-[13px] font-semibold text-[#5a5a56]"
+                      : activeTab === tab.key
+                        ? "flex items-center gap-1.5 border-b-2 border-[#ff6b4a] py-3 text-[13px] font-semibold text-[#e5e5e0]"
+                        : "flex items-center gap-1.5 border-b-2 border-transparent py-3 text-[13px] font-semibold text-[#8f8f8a] hover:text-[#e5e5e0]"
+                  }
+                >
+                  <Icon className="h-3.5 w-3.5" /> {tab.label}
+                  {isDisabledTab && (
+                    <span className="ml-1 rounded-[5px] bg-[#202020] px-[7px] py-[2px] font-[family-name:var(--font-mono-label)] text-[10px] font-semibold tracking-[0.05em] text-[#8f8f8a]">
+                      v2
+                    </span>
+                  )}
+                </a>
+              );
+            })}
+          </nav>
 
-        <nav className="mt-6 flex flex-wrap items-center gap-6 border-b border-neutral-800 text-sm">
-          {TABS.map((tab) => (
-            <a
-              key={tab.key}
-              href={tabHref(workspaceId, listId, tab.key)}
-              className={
-                activeTab === tab.key
-                  ? "border-b-2 border-[#ff6b4a] pb-3 text-white"
-                  : "pb-3 text-neutral-500 hover:text-neutral-300"
-              }
-            >
-              {tab.label}
-            </a>
-          ))}
-        </nav>
-
-        {activeTab === "overview" ? (
+          {activeTab === "overview" ? (
           <OverviewTab
             data={data}
             boundUpdateDescription={boundUpdateDescription}
@@ -343,13 +392,21 @@ export default async function ListPage({ params, searchParams }: Props) {
             bySection={data.dashboard.bySection}
             byState={data.dashboard.byState}
             completionOverTime={data.dashboard.completionOverTime}
+            progressPercent={data.dashboard.progressPercent}
+            completionHeatmap={data.dashboard.completionHeatmap}
+            contributionMap={data.dashboard.contributionMap}
+            attentionImbalance={data.dashboard.attentionImbalance}
+            peerComparisonEnabled={data.dashboard.peerComparisonEnabled}
+            canTogglePeerComparison={data.dashboard.canTogglePeerComparison}
+            boundTogglePeerComparison={boundTogglePeerComparison}
           />
         ) : (
           <div className="mt-10 rounded-lg border border-dashed border-neutral-800 px-4 py-16 text-center text-sm text-neutral-600">
             {TAB_NOTES[activeTab]}
           </div>
         )}
-      </div>
-    </main>
+        </div>
+      </main>
+    </div>
   );
 }

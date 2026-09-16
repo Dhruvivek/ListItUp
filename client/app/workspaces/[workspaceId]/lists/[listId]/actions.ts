@@ -18,6 +18,7 @@ import {
   setListGroupBy,
 } from "@/lib/list/list-sections";
 import { prisma } from "@/lib/prisma";
+import { setPeerComparisonEnabled } from "@/lib/workspace/workspace-peer-comparison";
 import { requireAuthenticatedSession } from "@/lib/session/require-authenticated-session";
 
 function listPath(workspaceId: string, listId: string): string {
@@ -256,6 +257,25 @@ export async function moveItemToColumnAction(
     groupBy: groupBy as BoardGroupBy,
     columnKey,
     blockerReason,
+  });
+  revalidatePath(listPath(workspaceId, listId));
+}
+
+// Dashboard's Peer Comparison switch (#58) — workspace-level, so it's read
+// fresh here rather than trusting a client-supplied prior value, and
+// forbidden for anyone but a Workspace Owner/Admin (enforced in
+// setPeerComparisonEnabled itself, not just hidden in the UI).
+export async function togglePeerComparisonAction(workspaceId: string, listId: string): Promise<void> {
+  const session = await requireAuthenticatedSession(listPath(workspaceId, listId));
+  const workspace = await prisma.workspace.findUniqueOrThrow({
+    where: { id: workspaceId },
+    select: { peerComparisonEnabled: true },
+  });
+
+  await setPeerComparisonEnabled(prisma, {
+    userId: session.user.id,
+    workspaceId,
+    enabled: !workspace.peerComparisonEnabled,
   });
   revalidatePath(listPath(workspaceId, listId));
 }

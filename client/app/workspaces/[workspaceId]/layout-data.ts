@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@/generated/prisma/client";
+import { browseLists } from "@/lib/list/list-browsing";
 import { countUnreadNotifications } from "@/lib/notification/notification-inbox";
 
 export type WorkspaceNavEntry = { id: string; name: string };
@@ -7,6 +8,10 @@ export type WorkspaceNavData = {
   switchableWorkspaces: WorkspaceNavEntry[];
   personalSpace: WorkspaceNavEntry | null;
   unreadNotificationCount: number;
+  // The current Workspace's Lists section in the sidebar
+  // (design-mocks/list-dashboard) — visibility-filtered the same way
+  // Home's Recent Lists widget is (lib/list/list-browsing.ts).
+  lists: WorkspaceNavEntry[];
 };
 
 // Kept separate from layout.tsx itself, and taking an injected PrismaClient
@@ -16,9 +21,10 @@ export type WorkspaceNavData = {
 // throws under plain tsx execution (see Architecture.md).
 export async function loadWorkspaceNavData(
   database: PrismaClient,
-  userId: string
+  userId: string,
+  workspaceId: string
 ): Promise<WorkspaceNavData> {
-  const [switchableMemberships, personalMembership, unreadNotificationCount] = await Promise.all([
+  const [switchableMemberships, personalMembership, unreadNotificationCount, lists] = await Promise.all([
     database.workspaceMember.findMany({
       where: { userId, workspace: { kind: "SHARED" } },
       include: { workspace: { select: { id: true, name: true } } },
@@ -29,6 +35,7 @@ export async function loadWorkspaceNavData(
       include: { workspace: { select: { id: true, name: true } } },
     }),
     countUnreadNotifications(database, userId),
+    browseLists(database, { userId, workspaceId }),
   ]);
 
   return {
@@ -40,5 +47,6 @@ export async function loadWorkspaceNavData(
       ? { id: personalMembership.workspace.id, name: personalMembership.workspace.name }
       : null,
     unreadNotificationCount,
+    lists: lists.map((list) => ({ id: list.id, name: list.name })),
   };
 }

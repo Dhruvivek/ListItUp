@@ -11,15 +11,27 @@ import {
 import {
   breakdownBySection,
   breakdownByState,
+  buildAttentionImbalance,
+  buildCompletionHeatmap,
   buildCompletionOverTime,
+  buildContributionMap,
   computeItemCounts,
+  computeProgressPercent,
+  type AttentionImbalanceEntry,
   type CompletionOverTimePoint,
+  type ContributionEntry,
+  type HeatmapCell,
   type ItemCounts,
   type SectionBreakdownEntry,
   type StateBreakdownEntry,
 } from "@/lib/report/list-dashboard";
 
 const COMPLETION_OVER_TIME_DAYS = 14;
+const COMPLETION_HEATMAP_WEEKS = 12;
+// Contribution Map and Attention Imbalance are per-person widgets — capped
+// so the bar list and radar chart stay legible on a List with a large team.
+const CONTRIBUTION_MAP_LIMIT = 6;
+const ATTENTION_IMBALANCE_LIMIT = 4;
 
 export type EligibleWorkspaceMember = { userId: string; name: string };
 
@@ -83,14 +95,22 @@ export type ListPageData = {
   // Files view (#22) — every Attachment across the List's Items, newest
   // first.
   filesViewEntries: FilesViewEntry[];
-  // Dashboard tab's count/breakdown widgets (#51) — computed over the same
-  // active (non-Archived) Items as the rest of the page, not a separate
-  // query.
+  // Dashboard tab's widgets (#51, #54-#58) — computed over the same active
+  // (non-Archived) Items as the rest of the page, not a separate query.
   dashboard: {
     counts: ItemCounts;
     bySection: SectionBreakdownEntry[];
     byState: StateBreakdownEntry[];
     completionOverTime: CompletionOverTimePoint[];
+    progressPercent: number;
+    completionHeatmap: HeatmapCell[][];
+    contributionMap: ContributionEntry[];
+    attentionImbalance: AttentionImbalanceEntry[];
+    // Off by default; only a Workspace Owner/Admin (canTogglePeerComparison)
+    // can flip it, and it governs whether Contribution Map/Attention
+    // Imbalance above show every List Member or just the viewer (#58).
+    peerComparisonEnabled: boolean;
+    canTogglePeerComparison: boolean;
   };
 };
 
@@ -114,12 +134,16 @@ export async function loadListPageData(
     return null;
   }
 
-  const [roles, workspaceMembers, sections, allItems] = await Promise.all([
+  const [roles, workspaceMembers, workspace, sections, allItems] = await Promise.all([
     getListRoles(database, { listId }),
     database.workspaceMember.findMany({
       where: { workspaceId },
       include: { user: { select: { id: true, name: true } } },
       orderBy: { createdAt: "asc" },
+    }),
+    database.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      select: { peerComparisonEnabled: true },
     }),
     database.section.findMany({ where: { listId }, orderBy: { order: "asc" } }),
     database.item.findMany({
@@ -207,14 +231,38 @@ export async function loadListPageData(
     sectionId: item.sectionId,
     updatedAt: item.updatedAt,
   }));
+  const counts = computeItemCounts(dashboardItems, now);
+  const memberAssignmentItems = items.map((item) => ({
+    state: item.state,
+    dueDate: item.dueDate,
+    assigneeUserIds: item.assignees.map((assignee) => assignee.userId),
+  }));
+  // Off, Contribution Map/Attention Imbalance show only the viewer's own
+  // row; on, every List Lead/Member becomes comparable (#58).
+  const peerComparisonCandidates = workspace.peerComparisonEnabled
+    ? assignableMembers
+    : assignableMembers.filter((member) => member.userId === userId);
+
   const dashboard = {
-    counts: computeItemCounts(dashboardItems, now),
+    counts,
     bySection: breakdownBySection(
       dashboardItems,
       sections.map((section) => ({ id: section.id, name: section.name }))
     ),
     byState: breakdownByState(dashboardItems),
     completionOverTime: buildCompletionOverTime(dashboardItems, now, COMPLETION_OVER_TIME_DAYS),
+    progressPercent: computeProgressPercent(counts),
+    completionHeatmap: buildCompletionHeatmap(dashboardItems, now, COMPLETION_HEATMAP_WEEKS),
+    contributionMap: buildContributionMap(memberAssignmentItems, peerComparisonCandidates).slice(
+      0,
+      CONTRIBUTION_MAP_LIMIT
+    ),
+    attentionImbalance: buildAttentionImbalance(memberAssignmentItems, peerComparisonCandidates, now).slice(
+      0,
+      ATTENTION_IMBALANCE_LIMIT
+    ),
+    peerComparisonEnabled: workspace.peerComparisonEnabled,
+    canTogglePeerComparison: access === "ADMIN",
   };
 
   const filesViewEntries = buildFilesViewEntries(

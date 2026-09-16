@@ -7,6 +7,8 @@ import {
 
 const TEST_FILES = [
   "lib/test/test-services.test.ts",
+  "lib/ui/member-display.test.ts",
+  "lib/report/list-dashboard.test.ts",
   "lib/auth/auth-config.test.ts",
   "lib/auth/verification-resend.test.ts",
   "lib/auth/email-request-rate-limit.integration.test.ts",
@@ -19,6 +21,9 @@ const TEST_FILES = [
   "lib/workspace/workspace-provisioning.test.ts",
   "lib/workspace/workspace-ownership.test.ts",
   "lib/workspace/default-workspace.test.ts",
+  "lib/workspace/workspace-peer-comparison.test.ts",
+  "app/workspaces/[workspaceId]/lists/[listId]/page.smoke.test.tsx",
+  "app/workspaces/[workspaceId]/layout.smoke.test.tsx",
   "lib/auth/magic-link-tokens.test.ts",
   "lib/auth/password-reset-tokens.test.ts",
   "lib/session/callback-url.test.ts",

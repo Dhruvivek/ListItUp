@@ -119,3 +119,153 @@ export function buildCompletionOverTime(items: DashboardItem[], now: Date, days:
 
   return points;
 }
+
+// Progress donut (#55): share of all active Items that are Complete.
+export function computeProgressPercent(counts: ItemCounts): number {
+  return counts.total === 0 ? 0 : Math.round((counts.completed / counts.total) * 100);
+}
+
+export type HeatmapCell = { date: string; count: number; intensity: 0 | 1 | 2 | 3 | 4 };
+
+// Completion Heatmap (#54): a GitHub-style grid of Complete counts per day
+// over a trailing window of full weeks, bucketed into 5 intensity levels
+// relative to the window's busiest day — aggregated across the whole List,
+// never per-Member (the mock's "Rhythm of work" framing).
+export function buildCompletionHeatmap(items: DashboardItem[], now: Date, weeks: number): HeatmapCell[][] {
+  const days = weeks * 7;
+  const completedCountsByDay = new Map<string, number>();
+  for (const item of items) {
+    if (item.state !== "COMPLETE") continue;
+    const key = toDateKey(item.updatedAt);
+    completedCountsByDay.set(key, (completedCountsByDay.get(key) ?? 0) + 1);
+  }
+
+  const rangeStartMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - (days - 1) * MS_PER_DAY;
+
+  const cells: { date: string; count: number }[] = [];
+  for (let i = 0; i < days; i++) {
+    const dayKey = toDateKey(new Date(rangeStartMs + i * MS_PER_DAY));
+    cells.push({ date: dayKey, count: completedCountsByDay.get(dayKey) ?? 0 });
+  }
+
+  const maxCount = Math.max(0, ...cells.map((cell) => cell.count));
+  const intensityFor = (count: number): HeatmapCell["intensity"] => {
+    if (count === 0 || maxCount === 0) return 0;
+    const ratio = count / maxCount;
+    if (ratio <= 0.25) return 1;
+    if (ratio <= 0.5) return 2;
+    if (ratio <= 0.75) return 3;
+    return 4;
+  };
+
+  const weekColumns: HeatmapCell[][] = [];
+  for (let w = 0; w < weeks; w++) {
+    weekColumns.push(
+      cells.slice(w * 7, w * 7 + 7).map((cell) => ({ ...cell, intensity: intensityFor(cell.count) }))
+    );
+  }
+
+  return weekColumns;
+}
+
+export type MemberAssignmentItem = { state: ItemState; dueDate: Date | null; assigneeUserIds: string[] };
+
+export type ContributionEntry = { userId: string; name: string; completionRatePercent: number };
+
+// Contribution Map (#56): "who is moving work forward" as a normalized
+// completion rate (Items completed ÷ Items assigned), never a raw count —
+// a Member with 2 Items and both done outranks one with 20 Items and 5
+// done. Only Members with at least one assigned Item appear, ranked
+// highest rate first.
+export function buildContributionMap(
+  items: MemberAssignmentItem[],
+  members: { userId: string; name: string }[]
+): ContributionEntry[] {
+  const assignedCounts = new Map<string, number>();
+  const completedCounts = new Map<string, number>();
+
+  for (const item of items) {
+    for (const userId of item.assigneeUserIds) {
+      assignedCounts.set(userId, (assignedCounts.get(userId) ?? 0) + 1);
+      if (item.state === "COMPLETE") {
+        completedCounts.set(userId, (completedCounts.get(userId) ?? 0) + 1);
+      }
+    }
+  }
+
+  return members
+    .filter((member) => (assignedCounts.get(member.userId) ?? 0) > 0)
+    .map((member) => {
+      const assigned = assignedCounts.get(member.userId) ?? 0;
+      const completed = completedCounts.get(member.userId) ?? 0;
+      return {
+        userId: member.userId,
+        name: member.name,
+        completionRatePercent: Math.round((completed / assigned) * 100),
+      };
+    })
+    .sort((a, b) => b.completionRatePercent - a.completionRatePercent);
+}
+
+export type AttentionAxis = "TO_DO" | "BLOCKED" | "OVERDUE" | "DONE";
+
+const ATTENTION_AXES: readonly AttentionAxis[] = ["TO_DO", "BLOCKED", "OVERDUE", "DONE"];
+
+export type AttentionImbalanceEntry = {
+  userId: string;
+  name: string;
+  normalized: Record<AttentionAxis, number>;
+};
+
+function emptyAxisCounts(): Record<AttentionAxis, number> {
+  return { TO_DO: 0, BLOCKED: 0, OVERDUE: 0, DONE: 0 };
+}
+
+// Attention Imbalance (#57): where a List's attention is skewed across its
+// people, one axis per state-of-concern (To Do, Blocked, Overdue, Done).
+// Each axis is normalized against its own busiest Member (0..1) so the
+// radar reads as relative skew, not absolute workload — a Member with the
+// most Blocked Items reaches the outer ring on that axis regardless of how
+// that compares to Done.
+export function buildAttentionImbalance(
+  items: MemberAssignmentItem[],
+  members: { userId: string; name: string }[],
+  now: Date
+): AttentionImbalanceEntry[] {
+  const rawByUserId = new Map<string, Record<AttentionAxis, number>>();
+
+  const bump = (userId: string, axis: AttentionAxis) => {
+    const counts = rawByUserId.get(userId) ?? emptyAxisCounts();
+    counts[axis] += 1;
+    rawByUserId.set(userId, counts);
+  };
+
+  for (const item of items) {
+    for (const userId of item.assigneeUserIds) {
+      if (item.state === "TO_DO") bump(userId, "TO_DO");
+      if (item.state === "BLOCKED") bump(userId, "BLOCKED");
+      if (item.state === "COMPLETE") bump(userId, "DONE");
+      if (item.state !== "COMPLETE" && item.dueDate !== null && item.dueDate.getTime() < now.getTime()) {
+        bump(userId, "OVERDUE");
+      }
+    }
+  }
+
+  const maxByAxis = emptyAxisCounts();
+  for (const counts of rawByUserId.values()) {
+    for (const axis of ATTENTION_AXES) {
+      maxByAxis[axis] = Math.max(maxByAxis[axis], counts[axis]);
+    }
+  }
+
+  return members
+    .filter((member) => rawByUserId.has(member.userId))
+    .map((member) => {
+      const raw = rawByUserId.get(member.userId)!;
+      const normalized = emptyAxisCounts();
+      for (const axis of ATTENTION_AXES) {
+        normalized[axis] = maxByAxis[axis] === 0 ? 0 : raw[axis] / maxByAxis[axis];
+      }
+      return { userId: member.userId, name: member.name, normalized };
+    });
+}

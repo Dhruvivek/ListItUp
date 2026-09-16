@@ -19,6 +19,7 @@ async function run() {
 
   const createdUserIds: string[] = [];
   const createdWorkspaceIds: string[] = [];
+  const createdListIds: string[] = [];
 
   async function createUser(): Promise<string> {
     const userId = randomUUID();
@@ -60,7 +61,7 @@ async function run() {
       await createWorkspace("SHARED", "Outsider Co");
       const personalId = await createWorkspace("PERSONAL", "Personal Space", userId);
 
-      const data = await loadWorkspaceNavData(prisma, userId);
+      const data = await loadWorkspaceNavData(prisma, userId, memberSharedId);
 
       assert.deepEqual(
         data.switchableWorkspaces.map((workspace) => workspace.id),
@@ -85,13 +86,40 @@ async function run() {
     // Space slot rather than one borrowed from a SHARED Workspace.
     {
       const userId = await createUser();
-      await createWorkspace("SHARED", "Shared Only Co", userId);
+      const sharedOnlyId = await createWorkspace("SHARED", "Shared Only Co", userId);
 
-      const data = await loadWorkspaceNavData(prisma, userId);
+      const data = await loadWorkspaceNavData(prisma, userId, sharedOnlyId);
 
       assert.equal(data.personalSpace, null);
     }
+
+    // The sidebar's Lists section (design-mocks/list-dashboard) shows the
+    // current Workspace's visible Lists, not another Workspace's.
+    {
+      const userId = await createUser();
+      const workspaceId = await createWorkspace("SHARED", "Acme Studio", userId);
+      const otherWorkspaceId = await createWorkspace("SHARED", "Other Co", userId);
+      const listId = randomUUID();
+      createdListIds.push(listId);
+      await prisma.list.create({
+        data: {
+          id: listId,
+          workspaceId,
+          name: "Platform Retrofit",
+          members: { create: [{ id: randomUUID(), userId, role: "MEMBER" }] },
+        },
+      });
+      const otherListId = randomUUID();
+      createdListIds.push(otherListId);
+      await prisma.list.create({ data: { id: otherListId, workspaceId: otherWorkspaceId, name: "Other List" } });
+
+      const data = await loadWorkspaceNavData(prisma, userId, workspaceId);
+
+      assert.deepEqual(data.lists, [{ id: listId, name: "Platform Retrofit" }]);
+    }
   } finally {
+    await prisma.listMember.deleteMany({ where: { listId: { in: createdListIds } } });
+    await prisma.list.deleteMany({ where: { id: { in: createdListIds } } });
     await prisma.workspaceMember.deleteMany({
       where: { workspaceId: { in: createdWorkspaceIds } },
     });

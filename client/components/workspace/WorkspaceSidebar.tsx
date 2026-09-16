@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, ChevronDown, ChevronRight, ChevronsUpDown, Home, ListChecks } from "lucide-react";
+import { Bell, ChevronDown, ChevronRight, ChevronsUpDown, Home, LayoutList, ListChecks } from "lucide-react";
 
 import type { WorkspaceNavEntry } from "@/app/workspaces/[workspaceId]/layout-data";
 
@@ -14,6 +14,7 @@ type WorkspaceSidebarProps = {
   switchableWorkspaces: WorkspaceNavEntry[];
   personalSpace: WorkspaceNavEntry | null;
   unreadNotificationCount: number;
+  lists: WorkspaceNavEntry[];
 };
 
 function initialsFromName(name: string): string {
@@ -48,7 +49,7 @@ function NavLink({
       }
     >
       <span className={isActive ? "text-[#ff8a70]" : "text-[#5a5a56]"}>{icon}</span>
-      <span className="flex-1">{label}</span>
+      <span className="flex-1 truncate">{label}</span>
       {badge !== undefined && badge > 0 && (
         <span
           aria-label={`${badge} unread notifications`}
@@ -68,6 +69,7 @@ export function WorkspaceSidebar({
   switchableWorkspaces,
   personalSpace,
   unreadNotificationCount,
+  lists,
 }: WorkspaceSidebarProps) {
   const pathname = usePathname();
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
@@ -77,6 +79,7 @@ export function WorkspaceSidebar({
   const isHomeActive = pathname === homeHref;
   const isMyTasksActive = pathname.startsWith("/my-tasks");
   const isUpdatesActive = pathname.startsWith("/updates");
+  const listHref = (listId: string) => `/workspaces/${currentWorkspaceId}/lists/${listId}`;
 
   return (
     <aside className="flex w-[264px] flex-shrink-0 flex-col gap-1 border-r border-[#232323] bg-[#0d0d0d] px-3 py-4">
@@ -141,6 +144,23 @@ export function WorkspaceSidebar({
           badge={unreadNotificationCount}
         />
       </nav>
+
+      {lists.length > 0 && (
+        <nav className="flex flex-col gap-0.5">
+          <div className="px-2.5 pb-1.5 pt-4 font-[family-name:var(--font-mono-label)] text-[10px] uppercase tracking-[0.14em] text-[#5a5a56]">
+            Lists
+          </div>
+          {lists.map((list) => (
+            <NavLink
+              key={list.id}
+              href={listHref(list.id)}
+              isActive={pathname.startsWith(listHref(list.id))}
+              icon={<LayoutList className="h-4 w-4" />}
+              label={list.name}
+            />
+          ))}
+        </nav>
+      )}
 
       <div className="mt-2">
         <button

@@ -3,8 +3,12 @@ import assert from "node:assert/strict";
 import {
   breakdownBySection,
   breakdownByState,
+  buildAttentionImbalance,
+  buildCompletionHeatmap,
   buildCompletionOverTime,
+  buildContributionMap,
   computeItemCounts,
+  computeProgressPercent,
 } from "./list-dashboard";
 
 function item(overrides: {
@@ -119,6 +123,107 @@ const NOW = new Date("2026-09-15T12:00:00.000Z");
     { date: "2026-09-13", cumulativeCompleted: 0 },
     { date: "2026-09-14", cumulativeCompleted: 0 },
     { date: "2026-09-15", cumulativeCompleted: 0 },
+  ]);
+}
+
+// computeProgressPercent: share of active Items that are Complete, 0 on
+// an empty List rather than dividing by zero.
+{
+  assert.equal(computeProgressPercent({ total: 4, completed: 3, incomplete: 1, overdue: 0 }), 75);
+  assert.equal(computeProgressPercent({ total: 0, completed: 0, incomplete: 0, overdue: 0 }), 0);
+}
+
+// buildCompletionHeatmap: one column per week, 7 cells per column, oldest
+// day first; intensity is bucketed relative to the window's busiest day,
+// and an all-zero window buckets everything to 0 rather than dividing by
+// zero.
+{
+  const items = [
+    item({ state: "COMPLETE", updatedAt: new Date("2026-09-15T08:00:00.000Z") }), // today, busiest day (2)
+    item({ state: "COMPLETE", updatedAt: new Date("2026-09-15T20:00:00.000Z") }),
+    item({ state: "COMPLETE", updatedAt: new Date("2026-09-09T08:00:00.000Z") }), // 1 completion
+    item({ state: "TO_DO", updatedAt: new Date("2026-09-14T08:00:00.000Z") }), // not Complete, ignored
+  ];
+  const weeks = buildCompletionHeatmap(items, NOW, 2);
+
+  assert.equal(weeks.length, 2);
+  assert.equal(weeks[0]!.length, 7);
+  assert.equal(weeks[0]![0]!.date, "2026-09-02");
+  assert.equal(weeks[1]![6]!.date, "2026-09-15");
+
+  const sept9 = weeks[1]!.find((cell) => cell.date === "2026-09-09")!;
+  assert.deepEqual(sept9, { date: "2026-09-09", count: 1, intensity: 2 });
+
+  const sept15 = weeks[1]!.find((cell) => cell.date === "2026-09-15")!;
+  assert.deepEqual(sept15, { date: "2026-09-15", count: 2, intensity: 4 });
+
+  const sept3 = weeks[0]!.find((cell) => cell.date === "2026-09-03")!;
+  assert.deepEqual(sept3, { date: "2026-09-03", count: 0, intensity: 0 });
+}
+
+{
+  const weeks = buildCompletionHeatmap([], NOW, 1);
+  assert.ok(weeks[0]!.every((cell) => cell.intensity === 0));
+}
+
+function assignedItem(overrides: {
+  state: "TO_DO" | "IN_PROGRESS" | "BLOCKED" | "COMPLETE";
+  dueDate?: Date | null;
+  assigneeUserIds: string[];
+}) {
+  return {
+    state: overrides.state,
+    dueDate: overrides.dueDate ?? null,
+    assigneeUserIds: overrides.assigneeUserIds,
+  };
+}
+
+// buildContributionMap: a normalized completion rate, not a raw count —
+// a Member with fewer assigned Items but a higher completion rate ranks
+// above one with more assigned but a lower rate. Members with zero
+// assigned Items are excluded entirely, not shown at 0%.
+{
+  const members = [
+    { userId: "riya", name: "Riya Kapoor" },
+    { userId: "maya", name: "Maya Torres" },
+    { userId: "idle", name: "Idle Member" },
+  ];
+  const items = [
+    assignedItem({ state: "COMPLETE", assigneeUserIds: ["riya"] }),
+    assignedItem({ state: "COMPLETE", assigneeUserIds: ["riya"] }),
+    assignedItem({ state: "TO_DO", assigneeUserIds: ["riya"] }),
+    assignedItem({ state: "COMPLETE", assigneeUserIds: ["maya"] }),
+    assignedItem({ state: "TO_DO", assigneeUserIds: ["maya"] }),
+    assignedItem({ state: "TO_DO", assigneeUserIds: ["maya"] }),
+  ];
+
+  assert.deepEqual(buildContributionMap(items, members), [
+    { userId: "riya", name: "Riya Kapoor", completionRatePercent: 67 },
+    { userId: "maya", name: "Maya Torres", completionRatePercent: 33 },
+  ]);
+}
+
+// buildAttentionImbalance: each axis is normalized against its own busiest
+// Member (0..1) — Riya has the most Blocked Items so she reaches 1 on that
+// axis; Maya's 1 Blocked Item out of Riya's 2 normalizes to 0.5. A Member
+// with no assigned Items is excluded.
+{
+  const members = [
+    { userId: "riya", name: "Riya Kapoor" },
+    { userId: "maya", name: "Maya Torres" },
+    { userId: "idle", name: "Idle Member" },
+  ];
+  const items = [
+    assignedItem({ state: "BLOCKED", assigneeUserIds: ["riya"] }),
+    assignedItem({ state: "BLOCKED", assigneeUserIds: ["riya"] }),
+    assignedItem({ state: "BLOCKED", assigneeUserIds: ["maya"] }),
+    assignedItem({ state: "TO_DO", dueDate: new Date("2026-09-01"), assigneeUserIds: ["maya"] }), // overdue
+    assignedItem({ state: "COMPLETE", assigneeUserIds: ["maya"] }),
+  ];
+
+  assert.deepEqual(buildAttentionImbalance(items, members, NOW), [
+    { userId: "riya", name: "Riya Kapoor", normalized: { TO_DO: 0, BLOCKED: 1, OVERDUE: 0, DONE: 0 } },
+    { userId: "maya", name: "Maya Torres", normalized: { TO_DO: 1, BLOCKED: 0.5, OVERDUE: 1, DONE: 1 } },
   ]);
 }
 

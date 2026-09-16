@@ -493,6 +493,7 @@ async function run() {
           title: "Completed item",
           state: "COMPLETE",
           creatorId: memberId,
+          updatedAt: now,
         },
       });
       await prisma.item.create({
@@ -518,6 +519,80 @@ async function run() {
       );
       assert.equal(data!.dashboard.completionOverTime.length, 14);
       assert.equal(data!.dashboard.completionOverTime.at(-1)?.cumulativeCompleted, 1);
+      assert.equal(data!.dashboard.progressPercent, 33);
+      assert.equal(data!.dashboard.completionHeatmap.length, 12);
+      assert.equal(data!.dashboard.peerComparisonEnabled, false, "off by default (#58)");
+      assert.equal(
+        data!.dashboard.canTogglePeerComparison,
+        false,
+        "a plain Workspace Member cannot toggle Peer Comparison"
+      );
+    }
+
+    // Contribution Map/Attention Imbalance (#56, #57) show only the viewer
+    // while Peer Comparison is off, and every List Lead/Member once a
+    // Workspace Owner/Admin turns it on (#58) — and a Workspace Owner can
+    // toggle it.
+    {
+      const { workspaceId, listId } = await createWorkspaceWithList();
+      const ownerId = await createUser();
+      const memberId = await createUser();
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: ownerId, role: "OWNER" },
+      });
+      await prisma.workspaceMember.create({
+        data: { id: randomUUID(), workspaceId, userId: memberId, role: "MEMBER" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: ownerId, role: "LEAD" },
+      });
+      await prisma.listMember.create({
+        data: { id: randomUUID(), listId, userId: memberId, role: "MEMBER" },
+      });
+      await prisma.item.create({
+        data: {
+          id: randomUUID(),
+          listId,
+          title: "Owner's item",
+          state: "COMPLETE",
+          creatorId: ownerId,
+          assignees: { create: [{ id: randomUUID(), userId: ownerId }] },
+        },
+      });
+      await prisma.item.create({
+        data: {
+          id: randomUUID(),
+          listId,
+          title: "Member's item",
+          creatorId: memberId,
+          assignees: { create: [{ id: randomUUID(), userId: memberId }] },
+        },
+      });
+
+      const offData = await loadListPageData(prisma, { userId: memberId, workspaceId, listId });
+      assert.ok(offData);
+      assert.deepEqual(
+        offData!.dashboard.contributionMap.map((entry) => entry.userId),
+        [memberId],
+        "Peer Comparison off: only the viewer's own row"
+      );
+      assert.deepEqual(offData!.dashboard.attentionImbalance.map((entry) => entry.userId), [memberId]);
+      assert.equal(offData!.dashboard.canTogglePeerComparison, false);
+
+      const ownerData = await loadListPageData(prisma, { userId: ownerId, workspaceId, listId });
+      assert.ok(ownerData);
+      assert.equal(ownerData!.dashboard.canTogglePeerComparison, true, "a Workspace Owner can toggle it");
+
+      await prisma.workspace.update({ where: { id: workspaceId }, data: { peerComparisonEnabled: true } });
+
+      const onData = await loadListPageData(prisma, { userId: memberId, workspaceId, listId });
+      assert.ok(onData);
+      assert.deepEqual(
+        onData!.dashboard.contributionMap.map((entry) => entry.userId).sort(),
+        [memberId, ownerId].sort(),
+        "Peer Comparison on: every List Lead/Member with assigned Items"
+      );
+      assert.equal(onData!.dashboard.peerComparisonEnabled, true);
     }
   } finally {
     const listIds = (
